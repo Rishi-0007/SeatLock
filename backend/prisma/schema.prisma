@@ -7,48 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum SeatStatus {
-  AVAILABLE
-  LOCKED
-  BOOKED
-}
-
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  EXPIRED
-}
-
 model User {
-  id    String @id @default(uuid())
-  email String @unique
-
-  boookings Booking[]
-
-  createdAt DateTime @default(now())
+  id        String    @id @default(uuid())
+  email     String    @unique
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
 }
 
 model Event {
-  id   String   @id @default(uuid())
-  name String
-  date DateTime
-
-  seats Seat[]
-
+  id        String   @id @default(uuid())
+  name      String
+  date      DateTime
   createdAt DateTime @default(now())
+  seats     Seat[]
 }
 
 model Seat {
-  id      String     @id @default(uuid())
-  eventId String
-  row     Int
-  number  Int
-  status  SeatStatus @default(AVAILABLE)
-
-  event    Event     @relation(fields: [eventId], references: [id])
-  bookings Booking[]
-
-  createdAt DateTime @default(now())
+  id        String     @id @default(uuid())
+  eventId   String
+  row       String
+  number    Int
+  status    SeatStatus @default(AVAILABLE)
+  createdAt DateTime   @default(now())
+  bookings  Booking[]
+  event     Event      @relation(fields: [eventId], references: [id])
 
   @@unique([eventId, row, number])
 }
@@ -59,9 +41,19 @@ model Booking {
   seatId    String
   status    BookingStatus @default(PENDING)
   expiresAt DateTime
+  createdAt DateTime      @default(now())
+  seat      Seat          @relation(fields: [seatId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+}
 
-  user User @relation(fields: [userId], references: [id])
-  seat Seat @relation(fields: [seatId], references: [id])
+enum SeatStatus {
+  AVAILABLE
+  LOCKED
+  BOOKED
+}
 
-  createdAt DateTime @default(now())
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
 }
