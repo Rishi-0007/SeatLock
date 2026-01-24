@@ -1,6 +1,5 @@
-import { PrismaClient, SeatStatus } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { SeatStatus } from '@prisma/client';
+import { prisma } from '../src/prisma/client';
 
 async function main() {
   console.log('🌱 Starting seed...');
