@@ -5,7 +5,7 @@ export const getEventById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // 1️⃣ Validate event
+    // Validate event
     const event = await prisma.event.findUnique({
       where: { id: String(id) },
     });
@@ -17,7 +17,7 @@ export const getEventById = async (req: Request, res: Response) => {
       });
     }
 
-    // 2️⃣ Fetch seats (ordered, deterministic)
+    // Fetch seats (ordered, deterministic)
     const seats = await prisma.seat.findMany({
       where: { eventId: String(id) },
       orderBy: [{ row: 'asc' }, { number: 'asc' }],
@@ -29,7 +29,7 @@ export const getEventById = async (req: Request, res: Response) => {
       },
     });
 
-    // 3️⃣ Return snapshot
+    // Return snapshot
     return res.status(200).json({
       success: true,
       event: {
