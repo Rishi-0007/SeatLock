@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma/client';
-import { seatTTLExists, setSeatTTL } from '../redis/seatLock';
+import { clearSeatTTL, seatTTLExists, setSeatTTL } from '../redis/seatLock';
+import { error } from 'node:console';
 
-export const seatLock = async (req: Request, res: Response) => {
+export const lockSeat = async (req: Request, res: Response) => {
   const seatId = req.params.seatId as string;
   const userId = 'user-1'; // mocked for now
 
@@ -67,6 +68,85 @@ export const seatLock = async (req: Request, res: Response) => {
         .status(409)
         .json({ success: false, message: 'Seat not available' });
     }
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+export const bookSeat = async (req: Request, res: Response) => {
+  const seatId = req.params.seatId as string;
+  const currentUser = 'user-1'; // mocked for now
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const seats = await tx.$queryRaw<
+        { id: string; status: string; lockedByUserId: string | null }[]
+      >`
+        SELECT id, status, lockedByUserId
+        FROM "Seat"
+        WHERE id = ${seatId}
+        FOR UPDATE;
+      `;
+
+      if (seats.length === 0) {
+        throw new Error('NOT_FOUND');
+      }
+
+      const seat = seats[0];
+
+      if (seat.status !== 'LOCKED') {
+        throw new Error('NOT_LOCKED');
+      }
+
+      if (seat.lockedByUserId !== currentUser) {
+        throw new Error('NOT_OWNER');
+      }
+
+      await tx.seat.update({
+        where: { id: seatId },
+        data: {
+          status: 'BOOKED',
+          lockedByUserId: null,
+        },
+      });
+
+      await tx.booking.create({
+        data: {
+          seatId,
+          userId: currentUser,
+          status: 'CONFIRMED',
+          expiresAt: null,
+        },
+      });
+    });
+
+    try {
+      await clearSeatTTL(seatId);
+    } catch (e) {
+      console.warn('Redis cleanup failed', e);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Seat booked successfully',
+    });
+  } catch (err: any) {
+    if (err.message === 'NOT_FOUND') {
+      return res
+        .status(404)
+        .json({ success: false, message: 'Seat not found' });
+    }
+    if (err.message === 'NOT_LOCKED') {
+      return res
+        .status(409)
+        .json({ success: false, message: 'Seat not locked' });
+    }
+    if (err.message === 'NOT_OWNER') {
+      return res
+        .status(403)
+        .json({ success: false, message: 'Not lock owner' });
+    }
+
     console.error(err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }

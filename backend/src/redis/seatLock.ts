@@ -9,6 +9,7 @@ export function seatLockKey(seatId: string) {
 export async function setSeatTTL(seatId: string, userId: string) {
   await redis.set(seatLockKey(seatId), userId, {
     EX: LOCK_TTL_SECONDS,
+    NX: true,
   });
 }
 
@@ -22,4 +23,8 @@ export async function seatTTLExists(seatId: string) {
 
 export async function clearSeatTTL(seatId: string) {
   await redis.del(seatLockKey(seatId));
+}
+
+export async function getSeatLockOwner(seatId: string) {
+  return redis.get(seatLockKey(seatId));
 }
