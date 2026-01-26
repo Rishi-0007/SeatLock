@@ -28,6 +28,7 @@ model Seat {
   row       String
   number    Int
   status    SeatStatus @default(AVAILABLE)
+  lockedBy  String?
   createdAt DateTime   @default(now())
   bookings  Booking[]
   event     Event      @relation(fields: [eventId], references: [id])
