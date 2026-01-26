@@ -23,15 +23,15 @@ model Event {
 }
 
 model Seat {
-  id        String     @id @default(uuid())
-  eventId   String
-  row       String
-  number    Int
-  status    SeatStatus @default(AVAILABLE)
-  lockedByUserId  String?
-  createdAt DateTime   @default(now())
-  bookings  Booking[]
-  event     Event      @relation(fields: [eventId], references: [id])
+  id             String     @id @default(uuid())
+  eventId        String
+  row            String
+  number         Int
+  status         SeatStatus @default(AVAILABLE)
+  lockedByUserId String?
+  createdAt      DateTime   @default(now())
+  bookings       Booking[]
+  event          Event      @relation(fields: [eventId], references: [id])
 
   @@unique([eventId, row, number])
 }
@@ -41,7 +41,6 @@ model Booking {
   userId    String
   seatId    String
   status    BookingStatus @default(PENDING)
-  expiresAt DateTime?
   createdAt DateTime      @default(now())
   seat      Seat          @relation(fields: [seatId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
