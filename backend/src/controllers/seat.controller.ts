@@ -2,10 +2,18 @@ import { Request, Response } from 'express';
 import { prisma } from '../prisma/client';
 import { clearSeatTTL, seatTTLExists, setSeatTTL } from '../redis/seatLock';
 import { Prisma } from '@prisma/client';
+import { io } from '../socket';
 
-export const lockSeat = async (req: Request, res: Response) => {
+const MOCK_USER_ID = 'user-1';
+
+type SeatEventPayload = {
+  seatIds: string[];
+  status: 'LOCKED' | 'AVAILABLE' | 'BOOKED';
+};
+
+export const lockSeats = async (req: Request, res: Response) => {
   const seatIds = req.body.seatIds as string[];
-  const userId = 'user-1';
+  const userId = MOCK_USER_ID;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -54,8 +62,14 @@ export const lockSeat = async (req: Request, res: Response) => {
 
     // Redis AFTER commit
     for (const seatId of seatIds) {
-      await setSeatTTL(seatId, userId); // must use NX internally
+      await setSeatTTL(seatId, userId);
     }
+
+    // Notify via Socket.IO
+    io.emit('seat:locked', {
+      seatIds,
+      status: 'LOCKED',
+    } as SeatEventPayload);
 
     res.status(200).json({
       success: true,
@@ -158,9 +172,9 @@ export const lockSeat = async (req: Request, res: Response) => {
 //   }
 // };
 
-export const bookSeat = async (req: Request, res: Response) => {
+export const bookSeats = async (req: Request, res: Response) => {
   const seatIds = req.body.seatIds as string[];
-  const currentUser = 'user-123';
+  const currentUser = MOCK_USER_ID;
 
   if (!seatIds || seatIds.length === 0) {
     return res.status(400).json({
@@ -211,6 +225,7 @@ export const bookSeat = async (req: Request, res: Response) => {
       });
     });
 
+    // Redis AFTER commit
     try {
       for (const seatId of seatIds) {
         await clearSeatTTL(seatId);
@@ -218,6 +233,12 @@ export const bookSeat = async (req: Request, res: Response) => {
     } catch (err) {
       console.warn('Redis cleanup failed', err);
     }
+
+    // Notify via Socket.IO
+    io.emit('seat:booked', {
+      seatIds,
+      status: 'BOOKED',
+    } as SeatEventPayload);
 
     return res.status(200).json({
       success: true,

@@ -1,9 +1,9 @@
 import express from 'express';
-import { bookSeat, lockSeat } from '../controllers/seat.controller';
+import { bookSeats, lockSeats } from '../controllers/seat.controller';
 
 const router = express.Router();
 
-router.post('/:seatId/lock', lockSeat);
-router.post('/:seatId/book', bookSeat);
+router.post('/lock', lockSeats);
+router.post('/book', bookSeats);
 
 export default router;

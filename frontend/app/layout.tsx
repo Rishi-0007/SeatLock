@@ -19,6 +19,18 @@ export default function RootLayout({
       console.log('🔴 Socket disconnected');
     });
 
+    socket.on('seat:locked', (payload) => {
+      console.log('🔒 Seats locked:', payload);
+    });
+
+    socket.on('seat:booked', (payload) => {
+      console.log('✅ Seats booked:', payload);
+    });
+
+    socket.on('seat:unlocked', (payload) => {
+      console.log('🔓 Seats unlocked:', payload);
+    });
+
     socket.onAny((event, payload) => {
       console.log('📡 Socket event:', event, payload);
     });
