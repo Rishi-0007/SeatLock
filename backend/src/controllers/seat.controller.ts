@@ -2,14 +2,9 @@ import { Request, Response } from 'express';
 import { prisma } from '../prisma/client';
 import { clearSeatTTL, seatTTLExists, setSeatTTL } from '../redis/seatLock';
 import { Prisma } from '@prisma/client';
-import { io } from '../socket/socket';
+import { io, SeatEventPayload } from '../socket/socket';
 
 const MOCK_USER_ID = 'user-1';
-
-type SeatEventPayload = {
-  seatIds: string[];
-  status: 'LOCKED' | 'AVAILABLE' | 'BOOKED';
-};
 
 export const lockSeats = async (req: Request, res: Response) => {
   const seatIds = req.body.seatIds as string[];

@@ -3,6 +3,11 @@ import http from 'http';
 
 export let io: Server;
 
+export type SeatEventPayload = {
+  seatIds: string[];
+  status: 'LOCKED' | 'AVAILABLE' | 'BOOKED';
+};
+
 export function initSocket(httpServer: http.Server) {
   io = new Server(httpServer, {
     cors: {
