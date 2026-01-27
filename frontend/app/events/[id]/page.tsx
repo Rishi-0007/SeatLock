@@ -1,66 +1,112 @@
-interface Seat {
-  id: string;
-  row: string;
-  number: number;
-  status: 'AVAILABLE' | 'LOCKED' | 'BOOKED';
-}
+'use client';
 
-async function getEventSeats(eventId: string) {
-  const res = await fetch(`http://localhost:4000/events/${eventId}/seats`, {
-    cache: 'no-store',
-  });
+import { Screen } from '@/components/seats/Screen';
+import { SeatLegend } from '@/components/seats/SeatLegend';
+import { SeatMap } from '../../../components/seats/SeatMap';
+import { SeatDTO } from '@/types/seat';
+import { LockSeatsBar } from '@/components/seats/LockSeatsBar';
+import { SelectionSummary } from '@/components/seats/SelectionSummary';
+import { useEffect, useState } from 'react';
+import { lockSeatsApi } from '@/lib/api';
+import { getSocket } from '@/lib/socket';
+import { updateSeats } from './useSeatState';
 
-  if (!res.ok) {
-    throw new Error('Failed to fetch seats');
+const mockSeats: SeatDTO[] = [
+  { id: '1', row: 'A', number: 1, status: 'AVAILABLE' },
+  { id: '2', row: 'A', number: 2, status: 'LOCKED' },
+  { id: '3', row: 'A', number: 3, status: 'BOOKED' },
+  { id: '4', row: 'B', number: 1, status: 'AVAILABLE' },
+  { id: '5', row: 'B', number: 2, status: 'AVAILABLE' },
+];
+
+export default function EventSeatsPage() {
+  const [seats, setSeats] = useState<Record<string, SeatDTO>>(() =>
+    Object.fromEntries(mockSeats.map((seat) => [seat.id, seat]))
+  );
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [isLocking, setIsLocking] = useState(false);
+
+  function toggleSeat(seatId: string) {
+    setSelectedSeatIds((prev) =>
+      prev.includes(seatId)
+        ? prev.filter((id) => id !== seatId)
+        : [...prev, seatId]
+    );
   }
 
-  return res.json();
-}
+  async function handleLockSeats() {
+    if (selectedSeatIds.length === 0) return;
 
-export default async function EventPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+    // 1️⃣ Disable UI immediately
+    setIsLocking(true);
 
-  const data = await getEventSeats(id);
+    try {
+      // 2️⃣ Call backend
+      await lockSeatsApi(selectedSeatIds);
+
+      // 3️⃣ Success
+      // ❌ Do NOT change colors
+      // ❌ Do NOT unlock UI
+      // We wait for socket confirmation next
+      console.log('Lock request accepted by backend');
+    } catch (error) {
+      console.error(error);
+
+      // 4️⃣ Backend rejected → rollback UI
+      setIsLocking(false);
+
+      // Seats stay SELECTED (blue)
+      alert('Failed to lock seats. Please try again.');
+    }
+  }
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    socket.on('seat:locked', ({ seatIds }) => {
+      setSeats((prev) => updateSeats(prev, seatIds, 'LOCKED'));
+      setIsLocking(false);
+      setSelectedSeatIds([]);
+    });
+
+    socket.on('seat:unlocked', ({ seatIds }) => {
+      setSeats((prev) => updateSeats(prev, seatIds, 'AVAILABLE'));
+    });
+
+    socket.on('seat:booked', ({ seatIds }) => {
+      setSeats((prev) => updateSeats(prev, seatIds, 'BOOKED'));
+    });
+
+    return () => {
+      socket.off('seat:locked');
+      socket.off('seat:unlocked');
+      socket.off('seat:booked');
+    };
+  }, []);
 
   return (
-    <main style={{ padding: '2rem' }}>
-      <h1>{data.event.name}</h1>
-      <p>{new Date(data.event.date).toLocaleString()}</p>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Screen />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(10, 1fr)',
-          gap: '8px',
-          marginTop: '2rem',
-        }}
-      >
-        {data.seats.map((seat: Seat) => (
-          <button
-            key={seat.id}
-            disabled={seat.status !== 'AVAILABLE'}
-            style={{
-              padding: '8px',
-              borderRadius: '4px',
-              background:
-                seat.status === 'AVAILABLE'
-                  ? '#16a34a'
-                  : seat.status === 'LOCKED'
-                    ? '#eab308'
-                    : '#dc2626',
-              color: 'white',
-              cursor: seat.status === 'AVAILABLE' ? 'pointer' : 'not-allowed',
-            }}
-          >
-            {seat.row}
-            {seat.number}
-          </button>
-        ))}
-      </div>
-    </main>
+      <SeatMap
+        seats={Object.values(seats)}
+        selectedSeatIds={selectedSeatIds}
+        isLocking={isLocking}
+        onToggleSeat={toggleSeat}
+      />
+
+      <SelectionSummary
+        seats={Object.values(seats)}
+        selectedSeatIds={selectedSeatIds}
+      />
+
+      <LockSeatsBar
+        disabled={selectedSeatIds.length === 0 || isLocking}
+        onLock={handleLockSeats}
+      />
+
+      <SeatLegend />
+    </div>
   );
 }

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../prisma/client';
 import { clearSeatTTL, seatTTLExists, setSeatTTL } from '../redis/seatLock';
 import { Prisma } from '@prisma/client';
-import { io } from '../socket';
+import { io } from '../socket/socket';
 
 const MOCK_USER_ID = 'user-1';
 
@@ -32,6 +32,8 @@ export const lockSeats = async (req: Request, res: Response) => {
         throw new Error('SEATS_NOT_FOUND');
       }
 
+      // Lazy cleanup approach (Secondary cleanup when infra fails)
+      // Primary cleanup is done as System-driven unlock when redis TTL expires
       for (const seat of seats) {
         if (seat.status === 'LOCKED') {
           const exists = await seatTTLExists(seat.id);

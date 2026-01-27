@@ -9,7 +9,6 @@ export function seatLockKey(seatId: string) {
 export async function setSeatTTL(seatId: string, userId: string) {
   await redis.set(seatLockKey(seatId), userId, {
     EX: LOCK_TTL_SECONDS,
-    NX: true,
   });
 }
 
