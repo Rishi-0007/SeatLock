@@ -3,7 +3,7 @@ type Props = {
   onLock: () => void;
 };
 
-export function LockSeatsBar({ disabled, onLock }: Props) {
+export function ProceedToPaymentBar({ disabled, onLock }: Props) {
   return (
     <div className="mt-4 flex justify-end">
       <button
@@ -18,7 +18,8 @@ export function LockSeatsBar({ disabled, onLock }: Props) {
           }
         `}
       >
-        Lock Seats
+        {/* Book here means calling seats/lock api and after payment seats/book will call automatically */}
+        Book Seats
       </button>
     </div>
   );

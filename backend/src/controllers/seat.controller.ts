@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma/client';
-import { clearSeatTTL, seatTTLExists, setSeatTTL } from '../redis/seatLock';
+import {
+  clearSeatTTL,
+  getSeatTTL,
+  seatTTLExists,
+  setSeatTTL,
+} from '../redis/seatLock';
 import { Prisma } from '@prisma/client';
 import { io, SeatEventPayload } from '../socket/socket';
 
@@ -66,6 +71,7 @@ export const lockSeats = async (req: Request, res: Response) => {
     io.emit('seat:locked', {
       seatIds,
       status: 'LOCKED',
+      lockedByUserId: userId,
     } as SeatEventPayload);
 
     res.status(200).json({
@@ -267,4 +273,22 @@ export const bookSeats = async (req: Request, res: Response) => {
       message: 'Internal server error',
     });
   }
+};
+
+export const getSeatLockTTL = async (req: Request, res: Response) => {
+  const { seatId } = req.params;
+
+  const ttl = await getSeatTTL(String(seatId));
+
+  if (ttl <= 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active lock',
+    });
+  }
+
+  res.json({
+    success: true,
+    ttl, // seconds
+  });
 };

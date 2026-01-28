@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import eventRoutes from './routes/event.route';
 import seatRoutes from './routes/seat.route';
+import paymentRoutes from './routes/payment.route';
+import webhookRoutes from './routes/webhook.route';
 
 dotenv.config();
 const app = express();
@@ -17,8 +19,12 @@ app.use(
   )
 );
 
+// Webhook route should be before express.json middleware
+app.use('/webhooks', webhookRoutes);
+
 app.use(express.json());
 app.use('/events', eventRoutes);
 app.use('/seats', seatRoutes);
+app.use('/payments', paymentRoutes);
 
 export default app;

@@ -4,18 +4,26 @@ import { Screen } from '@/components/seats/Screen';
 import { SeatLegend } from '@/components/seats/SeatLegend';
 import { SeatMap } from '../../../components/seats/SeatMap';
 import { Seat } from '@/types/seat';
-import { LockSeatsBar } from '@/components/seats/LockSeatsBar';
+import { ProceedToPaymentBar } from '@/components/seats/PaymentBar';
 import { SelectionSummary } from '@/components/seats/SelectionSummary';
 import { useEffect, useState } from 'react';
-import { fetchEventWithSeats, lockSeatsApi } from '@/lib/api';
+import {
+  createPaymentSession,
+  fetchEventWithSeats,
+  lockSeatsApi,
+} from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useParams } from 'next/navigation';
+import { PaymentCountdown } from '@/components/payment/PaymentCountdown';
 
 export default function EventSeatsPage() {
   const [seats, setSeats] = useState<Record<string, Seat>>({});
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLocking, setIsLocking] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [paymentTTL, setPaymentTTL] = useState<number | null>(null);
+  const [showPaymentUI, setShowPaymentUI] = useState(false);
 
   const { id: eventId } = useParams();
 
@@ -48,29 +56,21 @@ export default function EventSeatsPage() {
     );
   }
 
-  async function handleLockSeats() {
+  async function handleProceedToPayment() {
     if (selectedSeatIds.length === 0) return;
 
-    // 1️⃣ Disable UI immediately
     setIsLocking(true);
 
     try {
-      // 2️⃣ Call backend
+      // STEP 1: Lock seats
       await lockSeatsApi(selectedSeatIds);
 
-      // 3️⃣ Success
-      // ❌ Do NOT change colors
-      // ❌ Do NOT unlock UI
-      // We wait for socket confirmation next
-      console.log('Lock request accepted by backend');
+      // DO NOTHING ELSE HERE
+      // Payment will start AFTER socket confirms lock
     } catch (error) {
       console.error(error);
-
-      // 4️⃣ Backend rejected → rollback UI
       setIsLocking(false);
-
-      // Seats stay SELECTED (blue)
-      alert('Failed to lock seats. Please try again.');
+      alert('Failed to lock seats');
     }
   }
 
@@ -78,7 +78,8 @@ export default function EventSeatsPage() {
     const socket = getSocket();
     if (!socket) return;
 
-    socket.on('seat:locked', ({ seatIds, lockedByUserId }) => {
+    socket.on('seat:locked', async ({ seatIds, lockedByUserId }) => {
+      // update seat state
       setSeats((prev) => {
         const next = { ...prev };
         for (const id of seatIds) {
@@ -92,8 +93,28 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      setIsLocking(false);
       setSelectedSeatIds([]);
+      setIsLocking(false);
+
+      // ✅ Only for current user
+      if (lockedByUserId === 'user-1') {
+        // STEP A: fetch TTL from backend (single seat is enough)
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE}/seats/lock/${seatIds[0]}/ttl`
+        );
+        const data = await res.json();
+
+        setPaymentTTL(data.ttl);
+        setShowPaymentUI(true);
+
+        // STEP B: create payment session
+        const { url } = await createPaymentSession(seatIds, eventId as string);
+
+        // small delay so user sees countdown (UX polish)
+        setTimeout(() => {
+          window.location.href = url;
+        }, 800);
+      }
     });
 
     socket.on('seat:unlocked', ({ seatIds }) => {
@@ -131,7 +152,7 @@ export default function EventSeatsPage() {
       socket.off('seat:unlocked');
       socket.off('seat:booked');
     };
-  }, []);
+  }, [eventId]);
 
   if (loading) {
     return <div>Loading seats...</div>;
@@ -144,7 +165,7 @@ export default function EventSeatsPage() {
       <SeatMap
         seats={Object.values(seats)}
         selectedSeatIds={selectedSeatIds}
-        isLocking={isLocking}
+        isLocking={isLocking || showPaymentUI}
         onToggleSeat={toggleSeat}
         currentUserId="user-1"
       />
@@ -154,9 +175,18 @@ export default function EventSeatsPage() {
         selectedSeatIds={selectedSeatIds}
       />
 
-      <LockSeatsBar
-        disabled={selectedSeatIds.length === 0 || isLocking}
-        onLock={handleLockSeats}
+      {showPaymentUI && paymentTTL !== null && (
+        <div className="mb-4 rounded-md border border-yellow-300 bg-yellow-50 p-3">
+          <PaymentCountdown secondsLeft={paymentTTL} />
+          <p className="text-sm text-gray-600 mt-1">
+            Redirecting to secure payment…
+          </p>
+        </div>
+      )}
+
+      <ProceedToPaymentBar
+        disabled={selectedSeatIds.length === 0 || isLocking || showPaymentUI}
+        onLock={handleProceedToPayment}
       />
 
       <SeatLegend />
