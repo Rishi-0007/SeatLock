@@ -1,22 +1,23 @@
-type SeatStatus = 'AVAILABLE' | 'SELECTED' | 'LOCKED' | 'BOOKED';
+import { SeatUIStatus } from '@/lib/seatUiState';
 
 type SeatProps = {
   label: number;
-  status: SeatStatus;
+  status: SeatUIStatus;
   onClick?: () => void;
 };
 
-const COLORS: Record<SeatStatus, string> = {
-  AVAILABLE: '#22c55e', // green
-  SELECTED: '#3b82f6', // blue
-  LOCKED: '#facc15', // yellow
-  BOOKED: '#ef4444', // red
+const COLORS: Record<SeatUIStatus, string> = {
+  AVAILABLE: '#22c55e',
+  SELECTED: '#3b82f6',
+  LOCKED_BY_ME: '#facc15',
+  LOCKED_BY_OTHER: '#9ca3af',
+  BOOKED: '#ef4444',
 };
 
 export function Seat({ label, status, onClick }: SeatProps) {
   const isClickable = status === 'AVAILABLE' || status === 'SELECTED';
-  const isDisabled = status === 'LOCKED' || status === 'BOOKED';
-
+  const isDisabled = status === 'LOCKED_BY_OTHER' || status === 'BOOKED';
+  
   return (
     <svg
       width="36"

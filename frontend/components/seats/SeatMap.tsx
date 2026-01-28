@@ -1,11 +1,13 @@
+import { Seat as SeatType } from '@/types/seat';
 import { Seat } from './Seat';
-import { SeatDTO } from '@/types/seat';
+import { getSeatUIStatus } from '@/lib/seatUiState';
 
 type SeatMapProps = {
-  seats: SeatDTO[];
+  seats: SeatType[];
   selectedSeatIds: string[];
   isLocking: boolean;
   onToggleSeat: (seatId: string) => void;
+  currentUserId: string;
 };
 
 export function SeatMap({
@@ -13,8 +15,9 @@ export function SeatMap({
   selectedSeatIds,
   isLocking,
   onToggleSeat,
+  currentUserId,
 }: SeatMapProps) {
-  const seatsByRow = seats.reduce<Record<string, SeatDTO[]>>((acc, seat) => {
+  const seatsByRow = seats.reduce<Record<string, SeatType[]>>((acc, seat) => {
     acc[seat.row] = acc[seat.row] || [];
     acc[seat.row].push(seat);
     return acc;
@@ -27,16 +30,26 @@ export function SeatMap({
           <div className="w-6 font-semibold">{row}</div>
 
           <div className="flex gap-2">
-            {rowSeats.map((seat) => (
-              <Seat
-                key={seat.id}
-                label={seat.number}
-                status={
-                  selectedSeatIds.includes(seat.id) ? 'SELECTED' : seat.status
-                }
-                onClick={isLocking ? undefined : () => onToggleSeat(seat.id)}
-              />
-            ))}
+            {rowSeats.map((seat) => {
+              const uiStatus = getSeatUIStatus(
+                seat,
+                selectedSeatIds,
+                currentUserId
+              );
+
+              return (
+                <Seat
+                  key={seat.id}
+                  label={seat.number}
+                  status={uiStatus}
+                  onClick={
+                    isLocking || uiStatus !== 'AVAILABLE'
+                      ? undefined
+                      : () => onToggleSeat(seat.id)
+                  }
+                />
+              );
+            })}
           </div>
         </div>
       ))}

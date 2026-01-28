@@ -3,28 +3,42 @@
 import { Screen } from '@/components/seats/Screen';
 import { SeatLegend } from '@/components/seats/SeatLegend';
 import { SeatMap } from '../../../components/seats/SeatMap';
-import { SeatDTO } from '@/types/seat';
+import { Seat } from '@/types/seat';
 import { LockSeatsBar } from '@/components/seats/LockSeatsBar';
 import { SelectionSummary } from '@/components/seats/SelectionSummary';
 import { useEffect, useState } from 'react';
-import { lockSeatsApi } from '@/lib/api';
+import { fetchEventWithSeats, lockSeatsApi } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
-import { updateSeats } from './useSeatState';
-
-const mockSeats: SeatDTO[] = [
-  { id: '1', row: 'A', number: 1, status: 'AVAILABLE' },
-  { id: '2', row: 'A', number: 2, status: 'LOCKED' },
-  { id: '3', row: 'A', number: 3, status: 'BOOKED' },
-  { id: '4', row: 'B', number: 1, status: 'AVAILABLE' },
-  { id: '5', row: 'B', number: 2, status: 'AVAILABLE' },
-];
+import { useParams } from 'next/navigation';
 
 export default function EventSeatsPage() {
-  const [seats, setSeats] = useState<Record<string, SeatDTO>>(() =>
-    Object.fromEntries(mockSeats.map((seat) => [seat.id, seat]))
-  );
+  const [seats, setSeats] = useState<Record<string, Seat>>({});
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLocking, setIsLocking] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const { id: eventId } = useParams();
+
+  useEffect(() => {
+    async function loadEvent() {
+      try {
+        const data = await fetchEventWithSeats(eventId as string);
+
+        const seatMap = Object.fromEntries(
+          data.seats.map((seat: Seat) => [seat.id, seat])
+        );
+
+        setSeats(seatMap);
+        // later: setEvent(data.event)
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadEvent();
+  }, [eventId]);
 
   function toggleSeat(seatId: string) {
     setSelectedSeatIds((prev) =>
@@ -64,18 +78,52 @@ export default function EventSeatsPage() {
     const socket = getSocket();
     if (!socket) return;
 
-    socket.on('seat:locked', ({ seatIds }) => {
-      setSeats((prev) => updateSeats(prev, seatIds, 'LOCKED'));
+    socket.on('seat:locked', ({ seatIds, lockedByUserId }) => {
+      setSeats((prev) => {
+        const next = { ...prev };
+        for (const id of seatIds) {
+          if (!next[id]) continue;
+          next[id] = {
+            ...next[id],
+            status: 'LOCKED',
+            lockedByUserId,
+          };
+        }
+        return next;
+      });
+
       setIsLocking(false);
       setSelectedSeatIds([]);
     });
 
     socket.on('seat:unlocked', ({ seatIds }) => {
-      setSeats((prev) => updateSeats(prev, seatIds, 'AVAILABLE'));
+      setSeats((prev) => {
+        const next = { ...prev };
+        for (const id of seatIds) {
+          if (!next[id]) continue;
+          next[id] = {
+            ...next[id],
+            status: 'AVAILABLE',
+            lockedByUserId: null,
+          };
+        }
+        return next;
+      });
     });
 
     socket.on('seat:booked', ({ seatIds }) => {
-      setSeats((prev) => updateSeats(prev, seatIds, 'BOOKED'));
+      setSeats((prev) => {
+        const next = { ...prev };
+        for (const id of seatIds) {
+          if (!next[id]) continue;
+          next[id] = {
+            ...next[id],
+            status: 'BOOKED',
+            lockedByUserId: null,
+          };
+        }
+        return next;
+      });
     });
 
     return () => {
@@ -84,6 +132,10 @@ export default function EventSeatsPage() {
       socket.off('seat:booked');
     };
   }, []);
+
+  if (loading) {
+    return <div>Loading seats...</div>;
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -94,6 +146,7 @@ export default function EventSeatsPage() {
         selectedSeatIds={selectedSeatIds}
         isLocking={isLocking}
         onToggleSeat={toggleSeat}
+        currentUserId="user-1"
       />
 
       <SelectionSummary
