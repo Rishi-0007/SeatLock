@@ -32,7 +32,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
       metadata: {
         seatIds: JSON.stringify(seatIds),
         eventId,
-        userId: 'user-1', // mocked for now
+        userId: req.userId!,
       },
     });
 

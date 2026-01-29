@@ -4,11 +4,12 @@ import {
   getSeatLockTTL,
   lockSeats,
 } from '../controllers/seat.controller';
+import { requireAuth } from '../middlewares/auth';
 
 const router = express.Router();
 
-router.post('/lock', lockSeats);
-router.post('/book', bookSeats);
+router.post('/lock', requireAuth, lockSeats);
+router.post('/book', requireAuth, bookSeats);
 router.get('/lock/:seatId/ttl', getSeatLockTTL);
 
 export default router;

@@ -9,11 +9,9 @@ import {
 import { Prisma } from '@prisma/client';
 import { io, SeatEventPayload } from '../socket/socket';
 
-const MOCK_USER_ID = 'user-1';
-
 export const lockSeats = async (req: Request, res: Response) => {
   const seatIds = req.body.seatIds as string[];
-  const userId = MOCK_USER_ID;
+  const userId = req.userId!;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -63,8 +61,18 @@ export const lockSeats = async (req: Request, res: Response) => {
     });
 
     // Redis AFTER commit
-    for (const seatId of seatIds) {
-      await setSeatTTL(seatId, userId);
+    try {
+      for (const seatId of seatIds) {
+        await setSeatTTL(seatId, userId);
+      }
+    } catch (err) {
+      // rollback DB lock
+      await prisma.seat.updateMany({
+        where: { id: { in: seatIds } },
+        data: { status: 'AVAILABLE', lockedByUserId: null },
+      });
+
+      throw new Error('REDIS_LOCK_FAILED');
     }
 
     // Notify via Socket.IO
@@ -88,6 +96,12 @@ export const lockSeats = async (req: Request, res: Response) => {
       return res
         .status(409)
         .json({ success: false, message: 'Seat not available' });
+    }
+
+    if (err.message === 'REDIS_LOCK_FAILED') {
+      return res
+        .status(500)
+        .json({ success: false, message: 'Failed to lock seats' });
     }
 
     console.error(err);
@@ -177,7 +191,7 @@ export const lockSeats = async (req: Request, res: Response) => {
 
 export const bookSeats = async (req: Request, res: Response) => {
   const seatIds = req.body.seatIds as string[];
-  const currentUser = MOCK_USER_ID;
+  const currentUser = req.userId!;
 
   if (!seatIds || seatIds.length === 0) {
     return res.status(400).json({
