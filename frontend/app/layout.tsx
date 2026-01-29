@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket';
+import { AuthProvider } from '@/context/AuthContext';
 
 export default function RootLayout({
   children,
@@ -42,7 +43,9 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

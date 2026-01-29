@@ -15,8 +15,17 @@ import {
 import { getSocket } from '@/lib/socket';
 import { useParams } from 'next/navigation';
 import { PaymentCountdown } from '@/components/payment/PaymentCountdown';
+import { useAuth } from '@/context/AuthContext';
+import {
+  clearPostAuthAction,
+  getPostAuthAction,
+  setPostAuthAction,
+} from '@/lib/authIntent';
 
 export default function EventSeatsPage() {
+  const { user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   const [seats, setSeats] = useState<Record<string, Seat>>({});
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLocking, setIsLocking] = useState(false);
@@ -59,20 +68,40 @@ export default function EventSeatsPage() {
   async function handleProceedToPayment() {
     if (selectedSeatIds.length === 0) return;
 
+    // 🔐 Not logged in → open modal
+    if (!user) {
+      setPostAuthAction({
+        type: 'BOOK_SEATS',
+        seatIds: selectedSeatIds,
+        eventId: eventId as string,
+      });
+      setShowAuthModal(true);
+      return;
+    }
+
+    // ✅ Logged in → proceed
     setIsLocking(true);
 
     try {
-      // STEP 1: Lock seats
       await lockSeatsApi(selectedSeatIds);
-
-      // DO NOTHING ELSE HERE
-      // Payment will start AFTER socket confirms lock
     } catch (error) {
       console.error(error);
       setIsLocking(false);
       alert('Failed to lock seats');
     }
   }
+
+  useEffect(() => {
+    if (!user) return;
+
+    const action = getPostAuthAction();
+    if (!action) return;
+
+    if (action.type === 'BOOK_SEATS') {
+      clearPostAuthAction();
+      handleProceedToPayment();
+    }
+  }, [user]);
 
   useEffect(() => {
     const socket = getSocket();
