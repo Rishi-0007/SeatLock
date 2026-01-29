@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket';
 import { AuthProvider } from '@/context/AuthContext';
+import { Navbar } from '@/components/layout/Navbar';
+import './globals.css';
 
 export default function RootLayout({
   children,
@@ -44,7 +46,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <Navbar />
+          <main>{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

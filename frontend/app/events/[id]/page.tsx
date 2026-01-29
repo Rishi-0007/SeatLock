@@ -6,7 +6,7 @@ import { SeatMap } from '../../../components/seats/SeatMap';
 import { Seat } from '@/types/seat';
 import { ProceedToPaymentBar } from '@/components/seats/PaymentBar';
 import { SelectionSummary } from '@/components/seats/SelectionSummary';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   createPaymentSession,
   fetchEventWithSeats,
@@ -28,6 +28,7 @@ export default function EventSeatsPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [seats, setSeats] = useState<Record<string, Seat>>({});
+  const [event, setEvent] = useState<{ name: string; date: string } | null>(null);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLocking, setIsLocking] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,9 @@ export default function EventSeatsPage() {
         );
 
         setSeats(seatMap);
-        // later: setEvent(data.event)
+        if (data.event) {
+           setEvent(data.event);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -135,6 +138,17 @@ export default function EventSeatsPage() {
     }
   }, [user]);
 
+  /* 
+     State Refs for Event Listeners 
+     (needed because socket listeners close over state)
+  */
+  const showPaymentUIRef = useRef(showPaymentUI);
+  useEffect(() => { showPaymentUIRef.current = showPaymentUI; }, [showPaymentUI]);
+
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -156,24 +170,28 @@ export default function EventSeatsPage() {
 
       // If we locked it, we essentially handled the UI in handleProceedToPayment already
       // But clearing selection is good
-      if (lockedByUserId === user?.id) {
+      if (lockedByUserId === userRef.current?.id) {
          setSelectedSeatIds([]);
          setIsLocking(false); // Enable buttons/UI again if needed, or keep locked for payment UI
-         
-         // Note: We REMOVED the auto-redirect here because we moved it to handleProceedToPayment
       } else {
-         // Someone else locked seats
-         // Check if any of OUR selected seats were locked by them?
-         // If so, deselect them
+         // Someone else locked seats: deselect ours if conflict
          setSelectedSeatIds(prev => prev.filter(id => !seatIds.includes(id)));
       }
     });
 
     socket.on('seat:unlocked', ({ seatIds }) => {
+      let expiredForMe = false;
+
       setSeats((prev) => {
         const next = { ...prev };
         for (const id of seatIds) {
           if (!next[id]) continue;
+          
+          // Check if this was locked by ME
+          if (next[id].lockedByUserId === userRef.current?.id) {
+             expiredForMe = true;
+          }
+
           next[id] = {
             ...next[id],
             status: 'AVAILABLE',
@@ -182,6 +200,13 @@ export default function EventSeatsPage() {
         }
         return next;
       });
+
+      // 🕒 Handling Expiry
+      if (expiredForMe && showPaymentUIRef.current) {
+          alert('Your seat lock expired. Please select again.');
+          setShowPaymentUI(false);
+          setPaymentTTL(null);
+      }
     });
 
     socket.on('seat:booked', ({ seatIds }) => {
@@ -199,11 +224,12 @@ export default function EventSeatsPage() {
       });
 
       // ✅ Fix: Clear payment UI if these were our seats
-      if (seatIds.some((id: string) => selectedSeatIds.includes(id)) || showPaymentUI) {
+      // (selectedSeatIds is empty after lock, so we check showPaymentUI or if we just booked them logic)
+      // Actually, after booking success, we usually redirect or show success.
+      // But if we are still on this page (e.g. separate tab flow), we should clear UI.
+      if (showPaymentUIRef.current) {
          setShowPaymentUI(false);
          setPaymentTTL(null);
-         setSelectedSeatIds([]);
-         // Optional: Show success toast
       }
     });
 
@@ -212,7 +238,7 @@ export default function EventSeatsPage() {
       socket.off('seat:unlocked');
       socket.off('seat:booked');
     };
-  }, [eventId, user]); // Added user dependency
+  }, [eventId]); // Removed 'user' dependency to avoid re-binding socket, using refs instead
 
   if (loading) {
     return <div>Loading seats...</div>;
@@ -220,6 +246,23 @@ export default function EventSeatsPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+      {/* 🎬 Phase 2: Event Header */}
+      {event && (
+        <div className="mb-8 border-b pb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
+          <div className="mt-2 flex items-center text-gray-600 gap-4">
+             <div className="flex items-center gap-1">
+                <span>📍</span>
+                <span>IMAX Mumbai</span> 
+             </div>
+             <div className="flex items-center gap-1">
+                <span>🗓</span>
+                <span>{new Date(event.date).toLocaleDateString()} | {new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+             </div>
+          </div>
+        </div>
+      )}
+
       <Screen />
 
       <SeatMap

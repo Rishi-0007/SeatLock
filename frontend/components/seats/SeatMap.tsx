@@ -42,6 +42,7 @@ export function SeatMap({
                   key={seat.id}
                   label={seat.number}
                   status={uiStatus}
+                  isMine={seat.lockedByUserId === currentUserId}
                   onClick={
                     isLocking || uiStatus !== 'AVAILABLE'
                       ? undefined

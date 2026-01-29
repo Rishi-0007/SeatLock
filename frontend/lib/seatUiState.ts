@@ -3,8 +3,7 @@ import { Seat } from '@/types/seat';
 export type SeatUIStatus =
   | 'AVAILABLE'
   | 'SELECTED'
-  | 'LOCKED_BY_ME'
-  | 'LOCKED_BY_OTHER'
+  | 'LOCKED'
   | 'BOOKED';
 
 export function getSeatUIStatus(
@@ -13,14 +12,7 @@ export function getSeatUIStatus(
   currentUserId: string
 ): SeatUIStatus {
   if (seat.status === 'BOOKED') return 'BOOKED';
-
-  if (seat.status === 'LOCKED') {
-    return seat.lockedByUserId === currentUserId
-      ? 'LOCKED_BY_ME'
-      : 'LOCKED_BY_OTHER';
-  }
-
+  if (seat.status === 'LOCKED') return 'LOCKED';
   if (selectedSeatIds.includes(seat.id)) return 'SELECTED';
-
   return 'AVAILABLE';
 }

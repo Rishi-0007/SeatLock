@@ -21,6 +21,7 @@ model Event {
   name      String
   date      DateTime
   createdAt DateTime @default(now())
+  imageUrl  String?
   seats     Seat[]
 }
 

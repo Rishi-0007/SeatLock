@@ -13,15 +13,18 @@ async function main() {
   // 2️⃣ Create demo user
   const user = await prisma.user.create({
     data: {
+      name: 'Demo User',
       email: 'demouser@seatlock.dev',
+      password: 'password123', // In a real app, hash this!
     },
   });
 
   // 3️⃣ Create event
   const event = await prisma.event.create({
     data: {
-      name: 'SeatLock Demo Event',
-      date: new Date('2026-01-24T20:00:00Z'),
+      name: 'Avengers: Endgame',
+      date: new Date('2026-02-12T19:30:00Z'),
+      imageUrl: 'https://lh3.googleusercontent.com/d/1pY0CPzfrgwC8pCgINYgywxPdJjZKQcbq', // Direct link to the image
     },
   });
 

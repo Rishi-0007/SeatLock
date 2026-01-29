@@ -77,3 +77,22 @@ export async function createPaymentSession(seatIds: string[], eventId: string) {
 
   return res.json();
 }
+
+export async function fetchMyBookings() {
+  const res = await fetch(`${API_BASE}/bookings/me`, {
+     credentials: 'include'
+  });
+  if (!res.ok) throw new Error('Failed to fetch bookings');
+  return res.json();
+}
+
+export async function fetchAllEvents() {
+  const res = await fetch(`${API_BASE}/events`, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+  });
+
+  if (!res.ok) throw new Error('Failed to fetch events');
+  return res.json();
+}
