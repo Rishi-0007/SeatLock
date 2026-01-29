@@ -1,6 +1,6 @@
 import { redis } from './client';
 
-const LOCK_TTL_SECONDS = 120;
+const LOCK_TTL_SECONDS = 300; // 5 minutes
 
 export function seatLockKey(seatId: string) {
   return `seat:lock:${seatId}`;

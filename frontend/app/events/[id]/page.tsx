@@ -22,13 +22,26 @@ import {
   setPostAuthAction,
 } from '@/lib/authIntent';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { LoadingScreen } from '@/components/ui/LoadingSpinner';
+
+// Concurrency Demo Imports
+import { GlobalStatsBar } from '@/components/concurrency/GlobalStatsBar';
+import { SystemPanel } from '@/components/concurrency/SystemPanel';
+import { ConcurrencyControls } from '@/components/concurrency/ConcurrencyControls';
+import { useConcurrencyMock } from '@/hooks/useConcurrencyMock';
+
+type EventData = {
+  name: string;
+  date: string;
+  imageUrl?: string;
+};
 
 export default function EventSeatsPage() {
   const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [seats, setSeats] = useState<Record<string, Seat>>({});
-  const [event, setEvent] = useState<{ name: string; date: string } | null>(null);
+  const [event, setEvent] = useState<EventData | null>(null);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [isLocking, setIsLocking] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,6 +50,10 @@ export default function EventSeatsPage() {
   const [showPaymentUI, setShowPaymentUI] = useState(false);
 
   const { id: eventId } = useParams();
+
+  // Concurrency Mock Logic
+  const allSeatIds = Object.keys(seats);
+  const { modeState, setModeState, events: lockEvents, seatStates } = useConcurrencyMock(allSeatIds);
 
   useEffect(() => {
     async function loadEvent() {
@@ -72,7 +89,6 @@ export default function EventSeatsPage() {
   async function handleProceedToPayment() {
     if (selectedSeatIds.length === 0) return;
 
-    // 🔐 Not logged in → open modal
     if (!user) {
       setPostAuthAction({
         type: 'BOOK_SEATS',
@@ -83,36 +99,21 @@ export default function EventSeatsPage() {
       return;
     }
 
-    // ✅ Logged in → proceed
     setIsLocking(true);
 
     try {
       await lockSeatsApi(selectedSeatIds);
       
-      // 🚀 Optimistic/Direct flow: Create payment session immediately
-      // This keeps the "user gesture" context alive for potential window.open (though async might still be risky for strict blockers, it's better than socket)
-      // Actually, for "new tab", reliable way is <Link target="_blank"> or user click.
-      // But user said "clicking on book seats... should redirect".
-      
       const { url } = await createPaymentSession(selectedSeatIds, eventId as string);
       
-      // UX: Open in new tab as requested
       const newWindow = window.open(url, '_blank');
       
-      // Fallback if popup blocker blocked it (optional improvement)
       if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-         // Fallback: Redirect in same tab or show a manual link
-         // For now, let's respect the "new tab" request and assume standard browser settings or user allows it.
-         // Or getting back to "same tab" if new tab fails is cleaner? 
-         // User *explicitly* asked for another tab.
-         // If blocked, we might want to let them click a link.
-         // Let's just try window.open.
+        // Popup blocked - could show manual link
       }
 
-      // Show temporary UI or allow socket to update state
       setShowPaymentUI(true);
       
-      // We can fetch TTL here too if we want to show the countdown
       const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE}/seats/lock/${selectedSeatIds[0]}/ttl`
       );
@@ -138,10 +139,6 @@ export default function EventSeatsPage() {
     }
   }, [user]);
 
-  /* 
-     State Refs for Event Listeners 
-     (needed because socket listeners close over state)
-  */
   const showPaymentUIRef = useRef(showPaymentUI);
   useEffect(() => { showPaymentUIRef.current = showPaymentUI; }, [showPaymentUI]);
 
@@ -154,7 +151,6 @@ export default function EventSeatsPage() {
     if (!socket) return;
 
     socket.on('seat:locked', async ({ seatIds, lockedByUserId }) => {
-      // update seat state
       setSeats((prev) => {
         const next = { ...prev };
         for (const id of seatIds) {
@@ -168,13 +164,10 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      // If we locked it, we essentially handled the UI in handleProceedToPayment already
-      // But clearing selection is good
       if (lockedByUserId === userRef.current?.id) {
          setSelectedSeatIds([]);
-         setIsLocking(false); // Enable buttons/UI again if needed, or keep locked for payment UI
+         setIsLocking(false);
       } else {
-         // Someone else locked seats: deselect ours if conflict
          setSelectedSeatIds(prev => prev.filter(id => !seatIds.includes(id)));
       }
     });
@@ -187,7 +180,6 @@ export default function EventSeatsPage() {
         for (const id of seatIds) {
           if (!next[id]) continue;
           
-          // Check if this was locked by ME
           if (next[id].lockedByUserId === userRef.current?.id) {
              expiredForMe = true;
           }
@@ -201,7 +193,6 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      // 🕒 Handling Expiry
       if (expiredForMe && showPaymentUIRef.current) {
           alert('Your seat lock expired. Please select again.');
           setShowPaymentUI(false);
@@ -223,10 +214,6 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      // ✅ Fix: Clear payment UI if these were our seats
-      // (selectedSeatIds is empty after lock, so we check showPaymentUI or if we just booked them logic)
-      // Actually, after booking success, we usually redirect or show success.
-      // But if we are still on this page (e.g. separate tab flow), we should clear UI.
       if (showPaymentUIRef.current) {
          setShowPaymentUI(false);
          setPaymentTTL(null);
@@ -238,62 +225,151 @@ export default function EventSeatsPage() {
       socket.off('seat:unlocked');
       socket.off('seat:booked');
     };
-  }, [eventId]); // Removed 'user' dependency to avoid re-binding socket, using refs instead
+  }, [eventId]);
 
   if (loading) {
-    return <div>Loading seats...</div>;
+    return <LoadingScreen message="Loading seats..." />;
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* 🎬 Phase 2: Event Header */}
+    <div className="min-h-screen pb-24 relative">
+      {/* Global Live Stats Bar */}
+      <GlobalStatsBar state={modeState} />
+
+      {/* System Side Panel */}
+      <SystemPanel events={lockEvents} modeState={modeState} />
+
+      {/* Event Header with Image Backdrop */}
       {event && (
-        <div className="mb-8 border-b pb-6">
-          <h1 className="text-3xl font-bold text-gray-900">{event.name}</h1>
-          <div className="mt-2 flex items-center text-gray-600 gap-4">
-             <div className="flex items-center gap-1">
-                <span>📍</span>
-                <span>IMAX Mumbai</span> 
-             </div>
-             <div className="flex items-center gap-1">
-                <span>🗓</span>
-                <span>{new Date(event.date).toLocaleDateString()} | {new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-             </div>
+        <div className="relative h-64 sm:h-80 overflow-hidden">
+          {/* Background Image */}
+          {event.imageUrl ? (
+            <img
+              src={event.imageUrl}
+              alt={event.name}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <div 
+              className="absolute inset-0"
+              style={{
+                background: 'linear-gradient(135deg, var(--brand-primary) 0%, var(--background) 100%)',
+              }}
+            />
+          )}
+          
+          {/* Gradient Overlay */}
+          <div 
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(to bottom, rgba(3,0,20,0.3) 0%, rgba(3,0,20,0.7) 50%, var(--background) 100%)',
+            }}
+          />
+          
+          {/* Content */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 max-w-4xl mx-auto">
+            <div 
+              className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white mb-3"
+              style={{
+                background: 'rgba(16, 185, 129, 0.8)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              🎬 IMAX Experience
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 animate-fade-in-up">
+              SeatLock — Guaranteed seat allocation
+            </h1>
+            <p className="text-white/60 text-lg mb-6 max-w-2xl">
+                Visual demo of real-time seat contention and lock resolution under extreme concurrency.
+            </p>
+            
+            {/* Aha Moment Explainer - Only in Concurrency Mode */}
+            {modeState.isEnabled && (
+                <div className="mb-8 p-4 bg-indigo-500/10 border border-indigo-400/30 rounded-lg max-w-xl animate-fade-in-up">
+                    <div className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">Why SeatLock Exists</div>
+                    <p className="text-sm text-indigo-100/90 leading-relaxed">
+                        In high-traffic systems, thousands of users may attempt to reserve the same resource at the exact same millisecond. 
+                        SeatLock enforces <span className="text-white font-bold">strict locking and conflict resolution</span> to guarantee safe, single ownership under any load.
+                    </p>
+                </div>
+            )}
+            
+            {/* Controls */}
+            <div className="mb-4">
+                <ConcurrencyControls 
+                    state={modeState}
+                    onToggleMode={(val) => setModeState(p => ({ ...p, isEnabled: val }))}
+                    onToggleComparison={(val) => setModeState(p => ({ ...p, showComparison: val }))}
+                    onRunTest={() => setModeState(p => ({ ...p, activeUsers: p.activeUsers + 500 }))}
+                />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                IMAX Mumbai
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {new Date(event.date).toLocaleDateString('en-US', { 
+                  weekday: 'long',
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {new Date(event.date).toLocaleTimeString('en-US', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </span>
+            </div>
           </div>
         </div>
       )}
 
-      <Screen />
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <Screen />
 
-      <SeatMap
-        seats={Object.values(seats)}
-        selectedSeatIds={selectedSeatIds}
-        isLocking={isLocking || showPaymentUI}
-        onToggleSeat={toggleSeat}
-        currentUserId={user?.id || ''}
-      />
+        <SeatMap
+          seats={Object.values(seats)}
+          selectedSeatIds={selectedSeatIds}
+          isLocking={isLocking || showPaymentUI}
+          onToggleSeat={toggleSeat}
+          currentUserId={user?.id || ''}
+          concurrencyStates={seatStates}
+          showComparison={modeState.showComparison}
+        />
 
-      <SelectionSummary
-        seats={Object.values(seats)}
-        selectedSeatIds={selectedSeatIds}
-      />
+        <SelectionSummary
+          seats={Object.values(seats)}
+          selectedSeatIds={selectedSeatIds}
+        />
 
-      {showPaymentUI && paymentTTL !== null && (
-        <div className="mb-4 rounded-md border border-yellow-300 bg-yellow-50 p-3">
-          <PaymentCountdown secondsLeft={paymentTTL} />
-          <p className="text-sm text-gray-600 mt-1">
-            Redirecting to secure payment…
-          </p>
-        </div>
-      )}
+        {showPaymentUI && paymentTTL !== null && (
+          <div className="mt-6">
+            <PaymentCountdown initialSeconds={paymentTTL} />
+          </div>
+        )}
+
+        <SeatLegend />
+      </div>
 
       <ProceedToPaymentBar
         disabled={selectedSeatIds.length === 0 || isLocking || showPaymentUI}
         onLock={handleProceedToPayment}
         user={user}
       />
-
-      <SeatLegend />
 
       <AuthModal
         open={showAuthModal}
