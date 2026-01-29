@@ -1,9 +1,10 @@
 type Props = {
   disabled: boolean;
   onLock: () => void;
+  user: any; // Using any for simplicity in prop type, but ideally reuse User type
 };
 
-export function ProceedToPaymentBar({ disabled, onLock }: Props) {
+export function ProceedToPaymentBar({ disabled, onLock, user }: Props) {
   return (
     <div className="mt-4 flex justify-end">
       <button
@@ -18,8 +19,7 @@ export function ProceedToPaymentBar({ disabled, onLock }: Props) {
           }
         `}
       >
-        {/* Book here means calling seats/lock api and after payment seats/book will call automatically */}
-        Book Seats
+        {user ? 'Book Seats' : 'Login to Book'}
       </button>
     </div>
   );

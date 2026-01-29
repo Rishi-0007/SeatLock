@@ -16,8 +16,12 @@ app.use(
     process.env.NODE_ENV === 'production'
       ? {
           origin: process.env.FRONTEND_URL,
+          credentials: true,
         }
-      : {}
+      : {
+          origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+          credentials: true,
+        }
   )
 );
 

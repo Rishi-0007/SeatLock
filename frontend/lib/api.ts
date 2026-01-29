@@ -50,6 +50,7 @@ export async function lockSeatsApi(seatIds: string[]) {
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({ seatIds }),
   });
 
@@ -65,6 +66,7 @@ export async function createPaymentSession(seatIds: string[], eventId: string) {
   const res = await fetch(`${API_BASE}/payments/create-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ seatIds, eventId }),
   });
 

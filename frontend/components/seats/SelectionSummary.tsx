@@ -1,8 +1,8 @@
-import { SeatDTO } from '@/types/seat';
+import { Seat } from '@/types/seat';
 
 type Props = {
   selectedSeatIds: string[];
-  seats: SeatDTO[];
+  seats: Seat[];
 };
 
 export function SelectionSummary({ selectedSeatIds, seats }: Props) {

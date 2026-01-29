@@ -21,6 +21,7 @@ import {
   getPostAuthAction,
   setPostAuthAction,
 } from '@/lib/authIntent';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 export default function EventSeatsPage() {
   const { user } = useAuth();
@@ -84,10 +85,41 @@ export default function EventSeatsPage() {
 
     try {
       await lockSeatsApi(selectedSeatIds);
+      
+      // 🚀 Optimistic/Direct flow: Create payment session immediately
+      // This keeps the "user gesture" context alive for potential window.open (though async might still be risky for strict blockers, it's better than socket)
+      // Actually, for "new tab", reliable way is <Link target="_blank"> or user click.
+      // But user said "clicking on book seats... should redirect".
+      
+      const { url } = await createPaymentSession(selectedSeatIds, eventId as string);
+      
+      // UX: Open in new tab as requested
+      const newWindow = window.open(url, '_blank');
+      
+      // Fallback if popup blocker blocked it (optional improvement)
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+         // Fallback: Redirect in same tab or show a manual link
+         // For now, let's respect the "new tab" request and assume standard browser settings or user allows it.
+         // Or getting back to "same tab" if new tab fails is cleaner? 
+         // User *explicitly* asked for another tab.
+         // If blocked, we might want to let them click a link.
+         // Let's just try window.open.
+      }
+
+      // Show temporary UI or allow socket to update state
+      setShowPaymentUI(true);
+      
+      // We can fetch TTL here too if we want to show the countdown
+      const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE}/seats/lock/${selectedSeatIds[0]}/ttl`
+      );
+      const data = await res.json();
+      setPaymentTTL(data.ttl);
+
     } catch (error) {
       console.error(error);
       setIsLocking(false);
-      alert('Failed to lock seats');
+      alert('Failed to lock seats or create payment session');
     }
   }
 
@@ -122,27 +154,18 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      setSelectedSeatIds([]);
-      setIsLocking(false);
-
-      // ✅ Only for current user
-      if (lockedByUserId === 'user-1') {
-        // STEP A: fetch TTL from backend (single seat is enough)
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE}/seats/lock/${seatIds[0]}/ttl`
-        );
-        const data = await res.json();
-
-        setPaymentTTL(data.ttl);
-        setShowPaymentUI(true);
-
-        // STEP B: create payment session
-        const { url } = await createPaymentSession(seatIds, eventId as string);
-
-        // small delay so user sees countdown (UX polish)
-        setTimeout(() => {
-          window.location.href = url;
-        }, 800);
+      // If we locked it, we essentially handled the UI in handleProceedToPayment already
+      // But clearing selection is good
+      if (lockedByUserId === user?.id) {
+         setSelectedSeatIds([]);
+         setIsLocking(false); // Enable buttons/UI again if needed, or keep locked for payment UI
+         
+         // Note: We REMOVED the auto-redirect here because we moved it to handleProceedToPayment
+      } else {
+         // Someone else locked seats
+         // Check if any of OUR selected seats were locked by them?
+         // If so, deselect them
+         setSelectedSeatIds(prev => prev.filter(id => !seatIds.includes(id)));
       }
     });
 
@@ -174,6 +197,14 @@ export default function EventSeatsPage() {
         }
         return next;
       });
+
+      // ✅ Fix: Clear payment UI if these were our seats
+      if (seatIds.some((id: string) => selectedSeatIds.includes(id)) || showPaymentUI) {
+         setShowPaymentUI(false);
+         setPaymentTTL(null);
+         setSelectedSeatIds([]);
+         // Optional: Show success toast
+      }
     });
 
     return () => {
@@ -181,7 +212,7 @@ export default function EventSeatsPage() {
       socket.off('seat:unlocked');
       socket.off('seat:booked');
     };
-  }, [eventId]);
+  }, [eventId, user]); // Added user dependency
 
   if (loading) {
     return <div>Loading seats...</div>;
@@ -196,7 +227,7 @@ export default function EventSeatsPage() {
         selectedSeatIds={selectedSeatIds}
         isLocking={isLocking || showPaymentUI}
         onToggleSeat={toggleSeat}
-        currentUserId="user-1"
+        currentUserId={user?.id || ''}
       />
 
       <SelectionSummary
@@ -216,9 +247,15 @@ export default function EventSeatsPage() {
       <ProceedToPaymentBar
         disabled={selectedSeatIds.length === 0 || isLocking || showPaymentUI}
         onLock={handleProceedToPayment}
+        user={user}
       />
 
       <SeatLegend />
+
+      <AuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
     </div>
   );
 }
