@@ -49,7 +49,7 @@ export function Navbar() {
                     SeatLock
                   </span>
                   <span className="text-[10px] text-[var(--foreground-muted)] tracking-widest uppercase -mt-1">
-                    Premium Booking
+                    Distributed Locking Engine
                   </span>
                 </div>
               </Link>

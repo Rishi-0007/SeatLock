@@ -67,7 +67,7 @@ export function ProceedToPaymentBar({ disabled, onLock, user }: Props) {
             
             {/* Text */}
             <span className="relative">
-              {user ? 'Acquire Lock' : 'Login to Lock'}
+              {user ? 'Book Now' : 'Login to Book'}
             </span>
             
             {/* Arrow */}

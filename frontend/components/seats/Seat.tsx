@@ -1,6 +1,3 @@
-import { SeatConcurrencyState } from '@/types/concurrency';
-import { toast } from 'sonner';
-
 const COLORS = {
   AVAILABLE: {
     base: '#475569',       /* Slate 600 */
@@ -21,11 +18,6 @@ const COLORS = {
     base: '#be123c',       /* Rose 700 */
     gradient: 'linear-gradient(145deg, #e11d48 0%, #be123c 100%)',
   },
-  CONTENDED: {
-     base: '#ef4444',      /* Red 500 */
-     glow: 'rgba(239, 68, 68, 0.6)',
-     gradient: 'linear-gradient(145deg, #f87171 0%, #ef4444 100%)',
-  }
 };
 
 type SeatProps = {
@@ -33,64 +25,27 @@ type SeatProps = {
   status: 'AVAILABLE' | 'SELECTED' | 'LOCKED' | 'BOOKED';
   isMine?: boolean;
   onClick?: () => void;
-  // Concurrency Mock Props
-  concurrencyData?: SeatConcurrencyState;
-  showComparison?: boolean; // If true (SeatLock enabled), we handle conflicts gracefully. If false (Legacy), show chaos.
 };
 
-export function Seat({ label, status, isMine, onClick, concurrencyData, showComparison = true }: SeatProps) {
-  // Override status if contended
-  let displayStatus: 'AVAILABLE' | 'SELECTED' | 'LOCKED' | 'BOOKED' | 'CONTENDED' = status;
-  if (concurrencyData?.isContended) {
-      // In "Legacy" mode, contention looks like a double-booking or error (Red). 
-      // In "SeatLock" mode, contention is handled, maybe just show Locked or a specific "High Demand" color.
-      // For visual storytelling: 
-      // Legacy -> CONTENDED (Red/Chaos)
-      // SeatLock -> LOCKED (Amber/Safe) but maybe pulsing faster? 
-      // Let's make "With SeatLock" show it as LOCKED but with extra info in tooltip.
-      // "Without SeatLock" shows it as CONTENDED panic mode.
-      
-      if (!showComparison) { // Legacy Mode
-          displayStatus = 'CONTENDED';
-      } else {
-        // With SeatLock, it just stays LOCKED or whatever it is, but we might add a subtle pulse
-      }
-  }
-
+export function Seat({ label, status, isMine, onClick }: SeatProps) {
   const isClickable = status === 'AVAILABLE' || status === 'SELECTED';
   const isDisabled = (status === 'LOCKED' && !isMine) || status === 'BOOKED';
   
-  const colorSet = COLORS[displayStatus as keyof typeof COLORS] || COLORS.AVAILABLE;
+  const colorSet = COLORS[status] || COLORS.AVAILABLE;
   const fillColor = status === 'LOCKED' && isMine ? COLORS.LOCKED.base : colorSet.base;
-  const gradient = status === 'LOCKED' && isMine ? COLORS.LOCKED.gradient : colorSet.gradient;
 
-  // Glow effect for selected or my locked seats OR contended legacy
-  const hasGlow = status === 'SELECTED' || (status === 'LOCKED' && isMine) || displayStatus === 'CONTENDED';
-  const glowColor = status === 'SELECTED' ? COLORS.SELECTED.glow : 
-                    displayStatus === 'CONTENDED' ? COLORS.CONTENDED.glow : 
-                    COLORS.LOCKED.glow;
-
-  const handleClick = () => {
-      if (isDisabled) {
-         if (status === 'LOCKED') {
-             toast.error('Seat temporarily locked by another user');
-         } else if (status === 'BOOKED') {
-             toast.error('Seat already booked');
-         }
-         return;
-      }
-      onClick?.();
-  };
+  // Glow effect for selected or my locked seats
+  const hasGlow = status === 'SELECTED' || (status === 'LOCKED' && isMine);
+  const glowColor = status === 'SELECTED' ? COLORS.SELECTED.glow : COLORS.LOCKED.glow;
 
   return (
     <div
-      onClick={handleClick}
+      onClick={isClickable ? onClick : undefined}
       className={`
-        relative group flex-shrink-0
+        relative group
         transition-all duration-300 ease-out
-        ${isClickable ? 'cursor-pointer hover:-translate-y-0.5' : ''}
-        ${status === 'AVAILABLE' ? 'opacity-60 hover:opacity-100 scale-95 hover:scale-100' : 'scale-100'}
-        ${isDisabled ? 'cursor-not-allowed opacity-80' : ''}
+        ${isClickable ? 'cursor-pointer hover:-translate-y-1' : ''}
+        ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}
       `}
       style={{
         pointerEvents: isDisabled ? 'none' : 'auto',
@@ -102,37 +57,20 @@ export function Seat({ label, status, isMine, onClick, concurrencyData, showComp
           className="absolute inset-0 rounded-lg blur-md -z-10 animate-pulse"
           style={{
             background: glowColor,
-            opacity: displayStatus === 'CONTENDED' ? 0.8 : 0.6,
-            animationDuration: displayStatus === 'CONTENDED' ? '0.5s' : '2s'
+            opacity: 0.6,
           }}
         />
       )}
-
-      {/* Contention Ripple Effect */}
-      {displayStatus === 'CONTENDED' && (
-         <span className="absolute inline-flex h-full w-full rounded-lg bg-rose-500 opacity-20 animate-ping" />
-      )}
-      
-      {/* Tooltip for Concurrency Stats */}
-      {concurrencyData && (concurrencyData.attemptCount > 0 || concurrencyData.isContended) && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur text-white text-[10px] p-2 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 border border-white/20">
-              <div className="font-bold mb-0.5">Seat {label}</div>
-              <div>Attempts: <span className="text-amber-400">{concurrencyData.attemptCount}</span></div>
-              {concurrencyData.isContended && (
-                  <div className="text-rose-400 font-bold uppercase tracking-wider mt-1">{!showComparison ? 'Race Condition!' : 'Conflict Reserved'}</div>
-              )}
-          </div>
-      )}
       
       <svg
-        width="38"
-        height="38"
+        width="42"
+        height="42"
         viewBox="0 0 42 42"
         className="drop-shadow-lg"
       >
         <defs>
-          <linearGradient id={`seat-grad-${label}-${displayStatus}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{ stopColor: displayStatus === 'AVAILABLE' ? '#64748b' : displayStatus === 'SELECTED' ? '#60a5fa' : displayStatus === 'LOCKED' ? '#fbbf24' : displayStatus === 'BOOKED' ? '#e11d48' : '#ef4444' }} />
+          <linearGradient id={`seat-grad-${label}-${status}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: status === 'AVAILABLE' ? '#64748b' : status === 'SELECTED' ? '#60a5fa' : status === 'LOCKED' ? '#fbbf24' : '#e11d48' }} />
             <stop offset="100%" style={{ stopColor: fillColor }} />
           </linearGradient>
           
@@ -151,7 +89,7 @@ export function Seat({ label, status, isMine, onClick, concurrencyData, showComp
           width="32"
           height="20"
           rx="5"
-          fill={`url(#seat-grad-${label}-${displayStatus})`}
+          fill={`url(#seat-grad-${label}-${status})`}
           className="transition-all duration-300"
           style={{
             filter: isClickable ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' : 'none',
@@ -175,7 +113,7 @@ export function Seat({ label, status, isMine, onClick, concurrencyData, showComp
           width="26"
           height="8"
           rx="4"
-          fill={`url(#seat-grad-${label}-${displayStatus})`}
+          fill={`url(#seat-grad-${label}-${status})`}
           className="transition-all duration-300"
         />
         

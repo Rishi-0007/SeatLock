@@ -1,7 +1,6 @@
 import { Seat as SeatType } from '@/types/seat';
 import { Seat } from './Seat';
 import { getSeatUIStatus } from '@/lib/seatUiState';
-import { SeatConcurrencyState } from '@/types/concurrency';
 
 type SeatMapProps = {
   seats: SeatType[];
@@ -9,9 +8,6 @@ type SeatMapProps = {
   isLocking: boolean;
   onToggleSeat: (seatId: string) => void;
   currentUserId: string;
-  // Concurrency
-  concurrencyStates?: Record<string, SeatConcurrencyState>;
-  showComparison?: boolean;
 };
 
 export function SeatMap({
@@ -20,8 +16,6 @@ export function SeatMap({
   isLocking,
   onToggleSeat,
   currentUserId,
-  concurrencyStates,
-  showComparison = true,
 }: SeatMapProps) {
   const seatsByRow = seats.reduce<Record<string, SeatType[]>>((acc, seat) => {
     acc[seat.row] = acc[seat.row] || [];
@@ -81,8 +75,6 @@ export function SeatMap({
                           ? undefined
                           : () => onToggleSeat(seat.id)
                       }
-                      concurrencyData={concurrencyStates?.[seat.id]}
-                      showComparison={showComparison}
                     />
                   </div>
                 );

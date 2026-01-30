@@ -12,9 +12,52 @@ type Event = {
   imageUrl?: string;
 };
 
+// SVG Icons for each step
+const StepIcons = {
+  select: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+    </svg>
+  ),
+  lock: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  ),
+  broadcast: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+    </svg>
+  ),
+  pay: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
+  webhook: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  timeout: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+};
+
+// Helper to get "tomorrow at 12:00 PM" for demo purposes
+function getTomorrowNoon() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 0, 0, 0);
+  return tomorrow;
+}
+
 export default function LandingPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const demoDate = getTomorrowNoon();
 
   useEffect(() => {
     fetchAllEvents()
@@ -23,176 +66,152 @@ export default function LandingPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const flowSteps = [
+    { icon: 'select', label: 'Select Seat', tech: 'Next.js', step: 1 },
+    { icon: 'lock', label: 'Lock in DB + Redis TTL', tech: 'PostgreSQL + Redis', step: 2 },
+    { icon: 'broadcast', label: 'Broadcast Lock', tech: 'Socket.io', step: 3 },
+    { icon: 'pay', label: 'Pay', tech: 'Stripe Checkout', step: 4 },
+    { icon: 'webhook', label: 'Confirm via Webhook', tech: 'Stripe Webhook', step: 5 },
+    { icon: 'timeout', label: 'Timeout = Auto-Unlock', tech: 'Background Worker', step: 6 },
+  ];
+
+  const techStack = [
+    { name: 'Next.js', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nextjs/nextjs-original.svg' },
+    { name: 'TypeScript', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg' },
+    { name: 'PostgreSQL', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg' },
+    { name: 'Redis', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/redis/redis-original.svg' },
+    { name: 'Socket.io', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/socketio/socketio-original.svg' },
+    { name: 'Prisma', logo: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/prisma/prisma-original.svg' },
+  ];
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 sm:py-28">
-        {/* Background Effects */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-[var(--brand-secondary)] rounded-full blur-[150px] opacity-20" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[var(--brand-accent)] rounded-full blur-[150px] opacity-15" />
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] text-sm text-[var(--foreground-muted)] mb-6 animate-fade-in-down">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            Live seat availability • Real-time booking
-          </div>
-
-          {/* Main Title */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-6 animate-fade-in-up">
-            Book Your Perfect
-            <span className="block mt-2 gradient-text">
-              Cinema Experience
-            </span>
+      <section className="py-16 sm:py-20 border-b border-white/5">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mb-5">
+            SeatLock
           </h1>
-
-          {/* Subtitle */}
-          <p className="max-w-2xl mx-auto text-lg sm:text-xl text-[var(--foreground-muted)] mb-10 animate-fade-in" style={{ animationDelay: '200ms' }}>
-            Real-time seat selection with instant confirmation. 
-            No double bookings, no hassle — just seamless entertainment.
+          <p className="text-lg sm:text-xl text-[var(--foreground-muted)] max-w-2xl mx-auto leading-relaxed">
+            A distributed seat reservation engine with TTL-based locking, 
+            real-time updates, and webhook-driven payment confirmation.
           </p>
+        </div>
+      </section>
 
-          {/* Stats */}
-          <div className="flex flex-wrap justify-center gap-8 sm:gap-12 animate-fade-in" style={{ animationDelay: '400ms' }}>
-            {[
-              { value: '50K+', label: 'Tickets Booked' },
-              { value: '99.9%', label: 'Uptime' },
-              { value: '4.9★', label: 'User Rating' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</div>
-                <div className="text-sm text-[var(--foreground-muted)]">{stat.label}</div>
+      {/* Architecture Flow */}
+      <section className="py-12 border-b border-white/5">
+        <div className="max-w-5xl mx-auto px-4">
+          <h2 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-8 text-center">
+            How It Works
+          </h2>
+          
+          <div className="flex flex-wrap justify-center items-start gap-5">
+            {flowSteps.map((item, i, arr) => (
+              <div key={item.step} className="flex items-center gap-5">
+                <div className="flex flex-col items-center text-center w-28">
+                  <div className="w-14 h-14 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white mb-2">
+                    {StepIcons[item.icon as keyof typeof StepIcons]}
+                  </div>
+                  <div className="text-xs text-white font-medium leading-tight">
+                    <span className="text-white/40 mr-1">{item.step}.</span>
+                    {item.label}
+                  </div>
+                  <div className="text-[11px] text-white/40 mt-1">{item.tech}</div>
+                </div>
+                {i < arr.length - 1 && (
+                  <div className="text-white/20 text-xl hidden sm:block">→</div>
+                )}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Events Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        {/* Section Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white">Now Showing</h2>
-            <p className="text-[var(--foreground-muted)] mt-1">Book your seats for the latest releases</p>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 text-sm text-[var(--foreground-muted)]">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Live availability
+      {/* Tech Stack with Logos */}
+      <section className="py-10 border-b border-white/5">
+        <div className="max-w-4xl mx-auto px-4">
+          <h2 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-6 text-center">
+            Tech Stack
+          </h2>
+          <div className="flex flex-wrap justify-center gap-6">
+            {techStack.map((tech) => (
+              <div key={tech.name} className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-2.5">
+                  <img 
+                    src={tech.logo} 
+                    alt={tech.name} 
+                    className="w-8 h-8 object-contain"
+                    style={{ filter: tech.name === 'Next.js' || tech.name === 'Socket.io' || tech.name === 'Prisma' ? 'invert(1)' : 'none' }}
+                  />
+                </div>
+                <span className="text-xs text-white/50">{tech.name}</span>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
+
+      {/* Demo Events */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h2 className="text-lg font-bold text-white mb-2">Try the Demo</h2>
+        <p className="text-sm text-[var(--foreground-muted)] mb-6">
+          Select an event below to test the booking flow.
+        </p>
         
         {loading ? (
-          /* Loading Skeletons */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {[1, 2].map((i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
         ) : events.length === 0 ? (
-          /* Empty State */
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">🎬</div>
-            <p className="text-[var(--foreground-muted)] text-lg">No events currently available.</p>
-            <p className="text-sm text-[var(--foreground-muted)] mt-2">Check back soon for new releases!</p>
+          <div className="text-center py-12 text-[var(--foreground-muted)]">
+            No events available.
           </div>
         ) : (
-          /* Event Cards Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event, index) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {events.map((event) => (
               <Link 
                 href={`/events/${event.id}`} 
                 key={event.id} 
-                className="group block animate-fade-in-up"
-                style={{ animationDelay: `${index * 100}ms` }}
+                className="group block"
               >
                 <div 
-                  className="relative h-full rounded-xl overflow-hidden border border-[rgba(255,255,255,0.05)] transition-all duration-500 hover:-translate-y-2 hover:border-[rgba(14,165,233,0.3)]"
-                  style={{
-                    background: 'var(--card-bg)',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                  }}
+                  className="relative rounded-lg overflow-hidden border border-white/10 hover:border-white/20 transition-colors"
+                  style={{ background: 'var(--card-bg)' }}
                 >
-                  {/* Image Container */}
-                  <div className="relative h-56 overflow-hidden">
+                  {/* Image */}
+                  <div className="h-44 overflow-hidden">
                     {event.imageUrl ? (
-                      <>
-                        <img
-                          src={event.imageUrl}
-                          alt={event.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        />
-                        {/* Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--brand-primary)] via-transparent to-transparent opacity-80" />
-                      </>
+                      <img
+                        src={event.imageUrl}
+                        alt={event.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <div className="flex items-center justify-center h-full bg-[var(--background-secondary)]">
-                        <span className="text-6xl opacity-30">🎬</span>
+                      <div className="flex items-center justify-center h-full bg-white/5">
+                        <span className="text-4xl opacity-30">🎬</span>
                       </div>
                     )}
-
-                    {/* Date Badge */}
-                    <div 
-                      className="absolute top-4 right-4 px-3 py-1.5 rounded-lg text-xs font-bold text-white backdrop-blur-md"
-                      style={{
-                        background: 'rgba(0,0,0,0.5)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                      }}
-                    >
-                      {new Date(event.date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </div>
-
-                    {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-[var(--brand-secondary)] opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
                   </div>
                   
                   {/* Content */}
-                  <div className="p-5">
-                    <h3 className="text-lg font-bold text-white group-hover:text-[var(--brand-secondary)] transition-colors duration-300 line-clamp-1">
-                      {event.name}
-                    </h3>
-                    
-                    <div className="flex items-center gap-4 mt-3 text-sm text-[var(--foreground-muted)]">
-                      <span className="flex items-center gap-1.5">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        IMAX Mumbai
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {new Date(event.date).toLocaleTimeString('en-US', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </span>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-white text-base">{event.name}</h3>
+                    <div className="text-sm text-white/50 mt-1">
+                      {demoDate.toLocaleDateString('en-US', { 
+                        weekday: 'short',
+                        month: 'short', 
+                        day: 'numeric',
+                      })}, {demoDate.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
                     </div>
-                    
-                    {/* CTA */}
-                    <div className="mt-4 pt-4 border-t border-[rgba(255,255,255,0.05)] flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-sm">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        <span className="text-emerald-400 text-xs font-medium">Available</span>
-                      </div>
-                      <span 
-                        className="flex items-center gap-1 text-sm font-semibold text-[var(--brand-secondary)] group-hover:gap-2 transition-all duration-300"
-                      >
-                        Book Now
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </span>
+                    <div className="mt-3 text-sm text-white/60 group-hover:text-white/80 transition-colors">
+                      Select Seats →
                     </div>
                   </div>
                 </div>
@@ -200,6 +219,13 @@ export default function LandingPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Footer Note */}
+      <section className="py-8 text-center border-t border-white/5">
+        <p className="text-sm text-white/30">
+          Built to demonstrate distributed locking, real-time sync, and webhook handling.
+        </p>
       </section>
     </div>
   );

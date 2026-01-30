@@ -4,7 +4,6 @@ import { Screen } from '@/components/seats/Screen';
 import { SeatLegend } from '@/components/seats/SeatLegend';
 import { SeatMap } from '../../../components/seats/SeatMap';
 import { Seat } from '@/types/seat';
-import { ProceedToPaymentBar } from '@/components/seats/PaymentBar';
 import { SelectionSummary } from '@/components/seats/SelectionSummary';
 import { useEffect, useState, useRef } from 'react';
 import {
@@ -24,17 +23,19 @@ import {
 import { AuthModal } from '@/components/auth/AuthModal';
 import { LoadingScreen } from '@/components/ui/LoadingSpinner';
 
-// Concurrency Demo Imports
-import { GlobalStatsBar } from '@/components/concurrency/GlobalStatsBar';
-import { SystemPanel } from '@/components/concurrency/SystemPanel';
-import { ConcurrencyControls } from '@/components/concurrency/ConcurrencyControls';
-import { useConcurrencyMock } from '@/hooks/useConcurrencyMock';
-
 type EventData = {
   name: string;
   date: string;
   imageUrl?: string;
 };
+
+// Helper to get "tomorrow at 12:00 PM" for demo purposes
+function getTomorrowNoon() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 0, 0, 0);
+  return tomorrow;
+}
 
 export default function EventSeatsPage() {
   const { user } = useAuth();
@@ -47,13 +48,11 @@ export default function EventSeatsPage() {
   const [loading, setLoading] = useState(true);
 
   const [paymentTTL, setPaymentTTL] = useState<number | null>(null);
-  const [showPaymentUI, setShowPaymentUI] = useState(false);
+  const [seatsLocked, setSeatsLocked] = useState(false);
+  const [lockedSeatIds, setLockedSeatIds] = useState<string[]>([]);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const { id: eventId } = useParams();
-
-  // Concurrency Mock Logic
-  const allSeatIds = Object.keys(seats);
-  const { modeState, setModeState, events: lockEvents, seatStates } = useConcurrencyMock(allSeatIds);
 
   useEffect(() => {
     async function loadEvent() {
@@ -86,7 +85,8 @@ export default function EventSeatsPage() {
     );
   }
 
-  async function handleProceedToPayment() {
+  // Step 1: Lock seats only
+  async function handleLockSeats() {
     if (selectedSeatIds.length === 0) return;
 
     if (!user) {
@@ -104,26 +104,43 @@ export default function EventSeatsPage() {
     try {
       await lockSeatsApi(selectedSeatIds);
       
-      const { url } = await createPaymentSession(selectedSeatIds, eventId as string);
-      
-      const newWindow = window.open(url, '_blank');
-      
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Popup blocked - could show manual link
-      }
-
-      setShowPaymentUI(true);
-      
+      // Get TTL for countdown
       const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE}/seats/lock/${selectedSeatIds[0]}/ttl`
       );
       const data = await res.json();
       setPaymentTTL(data.ttl);
+      setLockedSeatIds([...selectedSeatIds]);
+      setSeatsLocked(true);
+      setSelectedSeatIds([]);
 
     } catch (error) {
       console.error(error);
+      alert('Failed to lock seats');
+    } finally {
       setIsLocking(false);
-      alert('Failed to lock seats or create payment session');
+    }
+  }
+
+  // Step 2: Redirect to Stripe payment
+  async function handleProceedToPayment() {
+    if (lockedSeatIds.length === 0) return;
+    
+    setIsRedirecting(true);
+
+    try {
+      const { url } = await createPaymentSession(lockedSeatIds, eventId as string);
+      
+      const newWindow = window.open(url, '_blank');
+      
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        // Popup blocked - fallback to same window
+        window.location.href = url;
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Failed to create payment session');
+      setIsRedirecting(false);
     }
   }
 
@@ -135,12 +152,12 @@ export default function EventSeatsPage() {
 
     if (action.type === 'BOOK_SEATS') {
       clearPostAuthAction();
-      handleProceedToPayment();
+      handleLockSeats();
     }
   }, [user]);
 
-  const showPaymentUIRef = useRef(showPaymentUI);
-  useEffect(() => { showPaymentUIRef.current = showPaymentUI; }, [showPaymentUI]);
+  const seatsLockedRef = useRef(seatsLocked);
+  useEffect(() => { seatsLockedRef.current = seatsLocked; }, [seatsLocked]);
 
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -164,10 +181,8 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      if (lockedByUserId === userRef.current?.id) {
-         setSelectedSeatIds([]);
-         setIsLocking(false);
-      } else {
+      // If locked by someone else, remove from selection
+      if (lockedByUserId !== userRef.current?.id) {
          setSelectedSeatIds(prev => prev.filter(id => !seatIds.includes(id)));
       }
     });
@@ -193,9 +208,10 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      if (expiredForMe && showPaymentUIRef.current) {
+      if (expiredForMe && seatsLockedRef.current) {
           alert('Your seat lock expired. Please select again.');
-          setShowPaymentUI(false);
+          setSeatsLocked(false);
+          setLockedSeatIds([]);
           setPaymentTTL(null);
       }
     });
@@ -214,8 +230,10 @@ export default function EventSeatsPage() {
         return next;
       });
 
-      if (showPaymentUIRef.current) {
-         setShowPaymentUI(false);
+      // If my seats were booked, reset state
+      if (seatsLockedRef.current) {
+         setSeatsLocked(false);
+         setLockedSeatIds([]);
          setPaymentTTL(null);
       }
     });
@@ -231,17 +249,16 @@ export default function EventSeatsPage() {
     return <LoadingScreen message="Loading seats..." />;
   }
 
+  // Get my locked seats for display
+  const myLockedSeats = Object.values(seats).filter(
+    s => s.status === 'LOCKED' && s.lockedByUserId === user?.id
+  );
+
   return (
-    <div className="min-h-screen pb-24 relative">
-      {/* Global Live Stats Bar */}
-      <GlobalStatsBar state={modeState} />
-
-      {/* System Side Panel */}
-      <SystemPanel events={lockEvents} modeState={modeState} />
-
-      {/* Event Header with Image Backdrop */}
+    <div className="min-h-screen pb-24">
+      {/* Event Header */}
       {event && (
-        <div className="relative h-64 sm:h-80 overflow-hidden">
+        <div className="relative h-48 sm:h-56 overflow-hidden">
           {/* Background Image */}
           {event.imageUrl ? (
             <img
@@ -268,58 +285,17 @@ export default function EventSeatsPage() {
           
           {/* Content */}
           <div className="absolute bottom-0 left-0 right-0 p-6 max-w-4xl mx-auto">
-            <div 
-              className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white mb-3"
-              style={{
-                background: 'rgba(16, 185, 129, 0.8)',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              🎬 IMAX Experience
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2 animate-fade-in-up">
-              SeatLock — Guaranteed seat allocation
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+              {event.name}
             </h1>
-            <p className="text-white/60 text-lg mb-6 max-w-2xl">
-                Visual demo of real-time seat contention and lock resolution under extreme concurrency.
-            </p>
-            
-            {/* Aha Moment Explainer - Only in Concurrency Mode */}
-            {modeState.isEnabled && (
-                <div className="mb-8 p-4 bg-indigo-500/10 border border-indigo-400/30 rounded-lg max-w-xl animate-fade-in-up">
-                    <div className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">Why SeatLock Exists</div>
-                    <p className="text-sm text-indigo-100/90 leading-relaxed">
-                        In high-traffic systems, thousands of users may attempt to reserve the same resource at the exact same millisecond. 
-                        SeatLock enforces <span className="text-white font-bold">strict locking and conflict resolution</span> to guarantee safe, single ownership under any load.
-                    </p>
-                </div>
-            )}
-            
-            {/* Controls */}
-            <div className="mb-4">
-                <ConcurrencyControls 
-                    state={modeState}
-                    onToggleMode={(val) => setModeState(p => ({ ...p, isEnabled: val }))}
-                    onToggleComparison={(val) => setModeState(p => ({ ...p, showComparison: val }))}
-                    onRunTest={() => setModeState(p => ({ ...p, activeUsers: p.activeUsers + 500 }))}
-                />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
-              <span className="flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                IMAX Mumbai
-              </span>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-white/70">
               <span className="flex items-center gap-1.5">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                {new Date(event.date).toLocaleDateString('en-US', { 
-                  weekday: 'long',
-                  month: 'long', 
+                {getTomorrowNoon().toLocaleDateString('en-US', { 
+                  weekday: 'short',
+                  month: 'short', 
                   day: 'numeric' 
                 })}
               </span>
@@ -327,9 +303,10 @@ export default function EventSeatsPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {new Date(event.date).toLocaleTimeString('en-US', { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
+                {getTomorrowNoon().toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit',
+                  hour12: true
                 })}
               </span>
             </div>
@@ -344,32 +321,136 @@ export default function EventSeatsPage() {
         <SeatMap
           seats={Object.values(seats)}
           selectedSeatIds={selectedSeatIds}
-          isLocking={isLocking || showPaymentUI}
+          isLocking={isLocking || seatsLocked}
           onToggleSeat={toggleSeat}
           currentUserId={user?.id || ''}
-          concurrencyStates={seatStates}
-          showComparison={modeState.showComparison}
         />
 
-        <SelectionSummary
-          seats={Object.values(seats)}
-          selectedSeatIds={selectedSeatIds}
-        />
+        {/* Selection Summary - only when selecting */}
+        {!seatsLocked && selectedSeatIds.length > 0 && (
+          <SelectionSummary
+            seats={Object.values(seats)}
+            selectedSeatIds={selectedSeatIds}
+          />
+        )}
 
-        {showPaymentUI && paymentTTL !== null && (
-          <div className="mt-6">
-            <PaymentCountdown initialSeconds={paymentTTL} />
+        {/* Locked Seats Summary + Countdown + Pay Button */}
+        {seatsLocked && paymentTTL !== null && (
+          <div className="mt-6 p-6 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white mb-1">
+                  Seats Locked
+                </h3>
+                <p className="text-sm text-white/60 mb-2">
+                  {myLockedSeats.map(s => `${s.row}${s.number}`).join(', ')}
+                </p>
+                <PaymentCountdown initialSeconds={paymentTTL} />
+              </div>
+              
+              <button
+                onClick={handleProceedToPayment}
+                disabled={isRedirecting}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors disabled:opacity-50"
+              >
+                {isRedirecting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Redirecting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    Proceed to Payment
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
         <SeatLegend />
       </div>
 
-      <ProceedToPaymentBar
-        disabled={selectedSeatIds.length === 0 || isLocking || showPaymentUI}
-        onLock={handleProceedToPayment}
-        user={user}
-      />
+      {/* Bottom Bar - Only when selecting (not locked) */}
+      {!seatsLocked && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 z-40 animate-slide-up"
+          style={{
+            background: 'rgba(3, 0, 20, 0.9)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.5)',
+          }}
+        >
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              {/* Left side info */}
+              <div className="hidden sm:block">
+                <p className="text-sm text-[var(--foreground-muted)]">
+                  {user ? 'Select seats to book' : 'Login to continue'}
+                </p>
+                <p className="text-xs text-[var(--foreground-muted)] opacity-60 mt-0.5">
+                  Seats are held for 5 minutes after booking
+                </p>
+              </div>
+              
+              {/* CTA Button */}
+              <button
+                disabled={selectedSeatIds.length === 0 || isLocking}
+                onClick={user ? handleLockSeats : () => setShowAuthModal(true)}
+                className={`
+                  relative group flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-bold text-base
+                  transition-all duration-300 overflow-hidden
+                  ${selectedSeatIds.length === 0 || isLocking
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:scale-105 hover:shadow-[0_0_30px_rgba(14,165,233,0.4)] active:scale-100'
+                  }
+                `}
+                style={{
+                  background: selectedSeatIds.length === 0 || isLocking
+                    ? 'rgba(100, 116, 139, 0.5)' 
+                    : 'var(--gradient-brand)',
+                  boxShadow: selectedSeatIds.length === 0 || isLocking ? 'none' : '0 0 20px rgba(14, 165, 233, 0.3)',
+                }}
+              >
+                {/* Shine effect */}
+                {selectedSeatIds.length > 0 && !isLocking && (
+                  <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                )}
+                
+                {/* Icon */}
+                <span className="relative">
+                  {isLocking ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : user ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                    </svg>
+                  )}
+                </span>
+                
+                {/* Text */}
+                <span className="relative">
+                  {isLocking ? 'Locking...' : user ? 'Book Seats' : 'Login to Book'}
+                </span>
+                
+                {/* Arrow */}
+                <svg className="relative w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AuthModal
         open={showAuthModal}
