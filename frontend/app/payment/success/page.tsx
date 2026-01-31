@@ -4,26 +4,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 
-// function ConfettiPiece({ delay, left, color }: { delay: number; left: number; color: string }) {
-//   return (
-//     <div
-//       className="confetti-piece"
-//       style={{
-//         left: `${left}%`,
-//         background: color,
-//         animationDelay: `${delay}s`,
-//         borderRadius: Math.random() > 0.5 ? '50%' : '2px',
-//         transform: `rotate(${Math.random() * 360}deg)`,
-//       }}
-//     />
-//   );
-// }
-
 function SuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -35,9 +19,6 @@ function SuccessContent() {
       .then((res) => {
         if (res.ok) {
           setStatus('success');
-          setShowConfetti(true);
-          // Stop confetti after animation
-          setTimeout(() => setShowConfetti(false), 4000);
         } else {
           setStatus('error');
         }
@@ -103,24 +84,8 @@ function SuccessContent() {
     );
   }
 
-  const confettiColors = ['#0ea5e9', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 relative overflow-hidden">
-      {/* Confetti
-      {showConfetti && (
-        <div className="confetti-container">
-          {Array.from({ length: 50 }).map((_, i) => (
-            <ConfettiPiece
-              key={i}
-              delay={Math.random() * 0.5}
-              left={Math.random() * 100}
-              color={confettiColors[Math.floor(Math.random() * confettiColors.length)]}
-            />
-          ))}
-        </div>
-      )} */}
-
       {/* Success Card */}
       <div 
         className="max-w-md w-full p-8 rounded-2xl text-center animate-scale-in relative z-10"
