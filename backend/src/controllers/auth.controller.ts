@@ -28,10 +28,11 @@ export const register = async (req: Request, res: Response) => {
 
     const token = signToken(user.id);
 
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false, // true in prod
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
     });
 
     // Frontend expects { user: { ... } }
@@ -54,10 +55,11 @@ export const login = async (req: Request, res: Response) => {
 
     const token = signToken(user.id);
 
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
     });
 
     // Frontend expects { user: ... }
@@ -70,7 +72,12 @@ export const login = async (req: Request, res: Response) => {
 
 export const logout = async (_: Request, res: Response) => {
   try {
-    res.clearCookie('token');
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('token', {
+      httpOnly: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+    });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: 'Logout failed' });
