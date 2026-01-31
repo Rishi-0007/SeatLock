@@ -13,9 +13,18 @@ type Booking = {
   status: string;
 };
 
+// Helper to get "tomorrow at 12:00 PM" for demo purposes
+function getTomorrowNoon() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 0, 0, 0);
+  return tomorrow;
+}
+
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const demoDate = getTomorrowNoon();
 
   useEffect(() => {
     fetchMyBookings()
@@ -88,10 +97,10 @@ export default function MyBookingsPage() {
                     }}
                   >
                     <div className="text-3xl sm:text-4xl font-bold text-white">
-                      {new Date(booking.date).getDate()}
+                      {demoDate.getDate()}
                     </div>
                     <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">
-                      {new Date(booking.date).toLocaleDateString('en-US', { month: 'short' })}
+                      {demoDate.toLocaleDateString('en-US', { month: 'short' })}
                     </div>
                     {/* Perforation effect */}
                     <div 
@@ -118,7 +127,7 @@ export default function MyBookingsPage() {
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {new Date(booking.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          {demoDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </div>
