@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { login, logout, register } from '../controllers/auth.controller';
-import { requireAuth } from '../middlewares/auth';
+import { AuthRequest, requireAuth } from '../middlewares/auth';
 
 const router: Router = Router();
 
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, (req: AuthRequest, res: Response) => {
   res.json({
     success: true,
     user: {
