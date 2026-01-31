@@ -59,23 +59,30 @@ export default function ConcurrencyTestPage() {
     // Join test room
     socket.emit('join:test', testRunId);
 
-    // Track counts
+    // Console logging for DevTools visibility
+    console.log('🟢 Connected to test room:', testRunId);
+
+    // Track counts with console logging
     socket.on('USER_ATTEMPT', (data: Omit<TestEvent, 'type'>) => {
+      console.log('👤 USER_ATTEMPT:', { userId: data.userId, seat: data.seat, timestamp: data.timestamp });
       setLiveCounts(prev => ({ ...prev, attempts: prev.attempts + 1 }));
       setEvents((prev) => [...prev, { type: 'USER_ATTEMPT', ...data }]);
     });
 
     socket.on('LOCK_ACQUIRED', (data: Omit<TestEvent, 'type'>) => {
+      console.log('🔒 LOCK_ACQUIRED:', { userId: data.userId, seat: data.seat, timestamp: data.timestamp });
       setLiveCounts(prev => ({ ...prev, acquired: prev.acquired + 1 }));
       setEvents((prev) => [...prev, { type: 'LOCK_ACQUIRED', ...data }]);
     });
 
     socket.on('LOCK_REJECTED', (data: Omit<TestEvent, 'type'>) => {
+      console.log('❌ LOCK_REJECTED:', { userId: data.userId, seat: data.seat, reason: data.reason, timestamp: data.timestamp });
       setLiveCounts(prev => ({ ...prev, rejected: prev.rejected + 1 }));
       setEvents((prev) => [...prev, { type: 'LOCK_REJECTED', ...data }]);
     });
 
     socket.on('BOOKING_CONFIRMED', (data: Omit<TestEvent, 'type'>) => {
+      console.log('✅ BOOKING_CONFIRMED:', { userId: data.userId, seat: data.seat, timestamp: data.timestamp });
       setLiveCounts(prev => ({ ...prev, confirmed: prev.confirmed + 1 }));
       setEvents((prev) => [...prev, { type: 'BOOKING_CONFIRMED', ...data }]);
     });
@@ -88,6 +95,12 @@ export default function ConcurrencyTestPage() {
       failedAttempts: number;
       collisionRate: string;
     }) => {
+      console.log('🏁 TEST_COMPLETED:', { 
+        testRunId: data.testRunId, 
+        successfulBookings: data.successfulBookings, 
+        failedAttempts: data.failedAttempts,
+        collisionRate: data.collisionRate 
+      });
       setIsRunning(false);
       setEvents((prev) => [...prev, { 
         type: 'TEST_COMPLETED', 
@@ -109,6 +122,7 @@ export default function ConcurrencyTestPage() {
     });
 
     return () => {
+      console.log('🔴 Disconnected from test room:', testRunId);
       socket.emit('leave:test', testRunId);
       socket.off('USER_ATTEMPT');
       socket.off('LOCK_ACQUIRED');
