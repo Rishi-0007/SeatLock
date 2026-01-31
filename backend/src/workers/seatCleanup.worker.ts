@@ -71,3 +71,27 @@ export async function cleanupExpiredSeatLocks() {
     console.error('[worker] Seat lock cleanup failed', err);
   }
 }
+
+/**
+ * Cleanup expired concurrency test runs
+ * Deletes test runs where expiresAt < now()
+ * CASCADE deletes all related data (virtualUsers, testSeats, testBookings, testSeatLocks)
+ */
+export async function cleanupExpiredTestRuns() {
+  try {
+    const result = await prisma.testRun.deleteMany({
+      where: {
+        expiresAt: { lt: new Date() },
+      },
+    });
+
+    if (result.count > 0) {
+      console.log(`[worker] Cleaned up ${result.count} expired test runs`);
+    }
+
+    return result.count;
+  } catch (err) {
+    console.error('[worker] Test run cleanup failed', err);
+    return 0;
+  }
+}

@@ -60,3 +60,65 @@ enum BookingStatus {
   CONFIRMED
   EXPIRED
 }
+
+// ============================================
+// CONCURRENCY TEST MODELS
+// ============================================
+
+model TestRun {
+  id           String         @id @default(uuid())
+  totalUsers   Int
+  totalSeats   Int
+  status       TestRunStatus  @default(RUNNING)
+  startedAt    DateTime       @default(now())
+  expiresAt    DateTime
+  virtualUsers VirtualUser[]
+  testSeats    TestSeat[]
+  testBookings TestBooking[]
+}
+
+enum TestRunStatus {
+  RUNNING
+  COMPLETED
+  EXPIRED
+}
+
+model VirtualUser {
+  id          String         @id @default(uuid())
+  testRunId   String
+  createdAt   DateTime       @default(now())
+  testRun     TestRun        @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  seatLocks   TestSeatLock[]
+  bookings    TestBooking[]
+}
+
+model TestSeat {
+  id         String         @id @default(uuid())
+  testRunId  String
+  row        String
+  number     Int
+  testRun    TestRun        @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  lock       TestSeatLock?
+
+  @@unique([testRunId, row, number])
+}
+
+// One lock per seat - seatId as PK enforces this
+model TestSeatLock {
+  seatId        String       @id
+  virtualUserId String
+  lockedAt      DateTime     @default(now())
+  seat          TestSeat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  virtualUser   VirtualUser  @relation(fields: [virtualUserId], references: [id], onDelete: Cascade)
+}
+
+model TestBooking {
+  id            String      @id @default(uuid())
+  testRunId     String
+  virtualUserId String
+  seatRow       String
+  seatNumber    Int
+  bookedAt      DateTime    @default(now())
+  testRun       TestRun     @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  virtualUser   VirtualUser @relation(fields: [virtualUserId], references: [id], onDelete: Cascade)
+}

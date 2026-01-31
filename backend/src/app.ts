@@ -32,6 +32,7 @@ app.use('/webhooks', webhookRoutes);
 app.use(express.json());
 
 import bookingRoutes from './routes/booking.route';
+import testRoutes from './routes/test.routes';
 
 // ...
 app.use('/auth', authRoutes);
@@ -39,5 +40,6 @@ app.use('/events', eventRoutes);
 app.use('/seats', seatRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/bookings', bookingRoutes);
+app.use('/test', testRoutes);
 
 export default app;
